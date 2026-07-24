@@ -9,9 +9,8 @@
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.5",
     "axios": "^1.6.8",
-    "canvas": "^2.11.2",
     "express": "^4.18.2",
-    "jimp": "^0.22.10",
+    "jimp": "^0.22.12",
     "moment": "^2.30.1",
     "pino": "^8.19.0",
     "qrcode": "^1.5.3",

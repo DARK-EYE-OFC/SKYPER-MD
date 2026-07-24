@@ -5,11 +5,11 @@ import express from 'express';
 import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys'
 import P from 'pino'
 import axios from 'axios'
-import { Sticker, StickerTypes } from 'wa-sticker-formatter'
-import { createCanvas, loadImage } from 'canvas'
+import pkg from 'wa-sticker-formatter';
+const { Sticker, StickerTypes } = pkg;
 import QRCode from 'qrcode'
 import qrcodeReader from 'qrcode-reader'
-import Jimp from 'jimp'
+import * as Jimp from 'jimp'
 import moment from 'moment'
 import translate from 'translate-google'
 import yts from 'yt-search'
