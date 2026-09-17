@@ -130,9 +130,38 @@ async function startBot() {
         const isAdmin = async () => { const meta = await sock.groupMetadata(from).catch(()=>{}); return meta?.participants.find(p=>p.id===sender)?.admin }
 
         // AFK
-        if(BOT_SETTINGS.afk[sender]) { delete BOT_SETTINGS.afk[sender]; saveSettings(); reply(boxMenu('WELCOME BACK', [`You are no longer AFK`]) + `\n${WM}`) }
-        if(m.message?.extendedTextMessage?.contextInfo?.mentionedJid){ for(let jid of m.message.extendedTextMessage.contextInfo.mentionedJid){ if(BOT_SETTINGS.afk[jid]){ const time = Math.floor((Date.now() - BOT_SETTINGS.afk[jid].time) / 1000 / 60); reply(boxMenu('AFK', [`@${jid.split('@')[0]} is AFK`, `Reason: ${BOT_SETTINGS.afk[jid].reason}`, `For: ${time} minutes`]) + `\n${WM}`, { mentions: [jid] }) }}}
+        BOT_SETTINGS.afk ??= {};
 
+if (BOT_SETTINGS.afk[sender]) {
+    delete BOT_SETTINGS.afk[sender];
+    saveSettings();
+
+    reply(
+        boxMenu('WELCOME BACK', [
+            'You are no longer AFK'
+        ]) + `\n${WM}`
+    );
+}
+
+if (m.message?.extendedTextMessage?.contextInfo?.mentionedJid) {
+    for (const jid of m.message.extendedTextMessage.contextInfo.mentionedJid) {
+        if (BOT_SETTINGS.afk[jid]) {
+            const time = Math.floor(
+                (Date.now() - BOT_SETTINGS.afk[jid].time) / 1000 / 60
+            );
+
+            reply(
+                boxMenu('AFK', [
+                    `@${jid.split('@')[0]} is AFK`,
+                    `Reason: ${BOT_SETTINGS.afk[jid].reason}`,
+                    `For: ${time} minutes`
+                ]) + `\n${WM}`,
+                { mentions: [jid] }
+            );
+        }
+    }
+}
+      
         // ANTILINK
         if(groupSettings[from]?.antilink && body.includes('chat.whatsapp.com')){ await sock.sendMessage(from, { delete: m.key }); reply(boxMenu('ANTILINK', [`Links not allowed`]) + `\n${WM}`) }
 
