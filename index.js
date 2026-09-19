@@ -1,2131 +1,1595 @@
+import 'dotenv/config'
+
 import fs from 'fs'
+import path from 'path'
 import express from 'express'
-import makeWASocket, {
-    DisconnectReason,
+import axios from 'axios'
+import pino from 'pino'
+
+import {
+    default as makeWASocket,
     useMultiFileAuthState,
+    DisconnectReason,
     fetchLatestBaileysVersion,
     Browsers
 } from '@whiskeysockets/baileys'
-import P from 'pino'
-import axios from 'axios'
-import pkg from 'wa-sticker-formatter'
-const { Sticker, StickerTypes } = pkg
-import QRCode from 'qrcode'
-import moment from 'moment'
-import yts from 'yt-search'
-import ytdl from 'ytdl-core'
 
-// ============================================================
-// SKYPER-MD
-// DARK-EYE OFC DEV
-// Version 2.0.5
-// ============================================================
+import { fileURLToPath } from 'url'
+
+import {
+    loadCommands,
+    handleCommand
+} from './commands/commandHandler.js'
+
+
+// ═══════════════════════════════════════════════════════════════
+// PATHS
+// ═══════════════════════════════════════════════════════════════
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const ROOT = __dirname
+
+const SESSION_DIR = path.join(ROOT, 'session')
+const DATABASE_DIR = path.join(ROOT, 'database')
+const TMP_DIR = path.join(ROOT, 'tmp')
+const PUBLIC_DIR = path.join(ROOT, 'public')
+
+
+// ═══════════════════════════════════════════════════════════════
+// CREATE REQUIRED DIRECTORIES
+// ═══════════════════════════════════════════════════════════════
+
+for (const dir of [
+    SESSION_DIR,
+    DATABASE_DIR,
+    TMP_DIR,
+    PUBLIC_DIR
+]) {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// DATABASE FILES
+// ═══════════════════════════════════════════════════════════════
+
+const ECONOMY_FILE = path.join(DATABASE_DIR, 'economy.json')
+const SETTINGS_FILE = path.join(DATABASE_DIR, 'settings.json')
+
+function createJSONFile(file, defaultData) {
+    if (!fs.existsSync(file)) {
+        fs.writeFileSync(
+            file,
+            JSON.stringify(defaultData, null, 2)
+        )
+    }
+}
+
+createJSONFile(ECONOMY_FILE, {})
+createJSONFile(SETTINGS_FILE, {
+    mode: 'public',
+    afk: {},
+    darkeye: false
+})
+
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════
+
+const config = {
+    botName: 'SKYPER-MD',
+    version: '2.0.5',
+
+    ownerName: 'DARK-EYE OFC DEV',
+    ownerNumber: '263783546271',
+
+    prefix: '.',
+    mode: 'public',
+
+    watermark:
+        '> *♤powered by DARK-EYE OFC DEV*',
+
+    sessionPath: './session',
+
+    dashboardUrl:
+        process.env.DASHBOARD_URL ||
+        'https://skyper-md.onrender.com',
+
+    apiKeys: {
+        openweather:
+            process.env.OPENWEATHER_API_KEY || '',
+
+        removebg:
+            process.env.REMOVEBG_API_KEY || '',
+
+        lovable:
+            process.env.LOVABLE_API_KEY || '',
+
+        unsplash:
+            process.env.UNSPLASH_API_KEY || '',
+
+        news:
+            process.env.NEWS_API_KEY || ''
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// OWNER
+// ═══════════════════════════════════════════════════════════════
+
+const OWNER_NUM = config.ownerNumber
+
+const OWNER_JID =
+    `${OWNER_NUM}@s.whatsapp.net`
+
+
+// ═══════════════════════════════════════════════════════════════
+// EXPRESS SERVER
+// ═══════════════════════════════════════════════════════════════
 
 const app = express()
 
+const PORT =
+    process.env.PORT || 10000
+
 app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use(express.urlencoded({
+    extended: true
+}))
 
-const PORT = process.env.PORT || 10000
-const DASHBOARD_URL = 'https://skyper-md.onrender.com'
-
-let sock = null
-let latestCode = 'Waiting for bot to start...'
-
-global.totalCommands = 0
-
-// ============================================================
-// CONFIG
-// ============================================================
-
-const config = {
-    prefix: '.',
-    ownerName: 'DARK-EYE OFC DEV',
-    ownerNumber: '263783546271',
-    botName: 'SKYPER-MD',
-    version: '2.0.5',
-    mode: 'public',
-
-    watermark: '> *♤powered by DARK-EYE OFC DEV*',
-
-    apiKeys: {
-        openweather: process.env.OPENWEATHER_API_KEY || '',
-        removebg: process.env.REMOVEBG_API_KEY || '',
-        lovable: process.env.LOVABLE_API_KEY || '',
-        unsplash: process.env.UNSPLASH_API_KEY || '',
-        news: process.env.NEWS_API_KEY || ''
-    }
-}
-
-const WM = config.watermark
-const PREFIX = config.prefix
-const OWNER = config.ownerName
-const OWNER_NUM = config.ownerNumber
-const VERSION = config.version
-const OWNER_JID = `${OWNER_NUM}@s.whatsapp.net`
-
-// ============================================================
-// DATABASE
-// ============================================================
-
-const dbDir = './database'
-const tmpDir = './tmp'
-
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true })
-}
-
-if (!fs.existsSync(tmpDir)) {
-    fs.mkdirSync(tmpDir, { recursive: true })
-}
-
-const ecoFile = `${dbDir}/economy.json`
-const settingsFile = `${dbDir}/settings.json`
-
-if (!fs.existsSync(ecoFile)) {
-    fs.writeFileSync(ecoFile, '{}')
-}
-
-if (!fs.existsSync(settingsFile)) {
-    fs.writeFileSync(settingsFile, '{}')
-}
-
-let economy = JSON.parse(fs.readFileSync(ecoFile, 'utf8'))
-
-let BOT_SETTINGS = JSON.parse(
-    fs.readFileSync(settingsFile, 'utf8')
+app.use(
+    express.static(PUBLIC_DIR)
 )
 
-// Make sure required settings always exist
-BOT_SETTINGS.afk ??= {}
-BOT_SETTINGS.mode ??= config.mode
-BOT_SETTINGS.darkeye ??= false
 
-let groupSettings = {}
-let warns = {}
-
-const saveEco = () => {
-    fs.writeFileSync(
-        ecoFile,
-        JSON.stringify(economy, null, 2)
-    )
-}
-
-const saveSettings = () => {
-    fs.writeFileSync(
-        settingsFile,
-        JSON.stringify(BOT_SETTINGS, null, 2)
-    )
-}
-
-saveSettings()
-
-// ============================================================
-// HELPERS
-// ============================================================
-
-const boxMenu = (title, lines = []) => {
-    let text = `╭───❒「 *${title}* 」❒───╮\n`
-
-    for (const line of lines) {
-        text += `│≈♤ ${line}\n`
-    }
-
-    text += `╰────────────────────❒`
-
-    return text
-}
-
-function formatUptime(seconds) {
-    seconds = Math.floor(seconds)
-
-    const days = Math.floor(seconds / 86400)
-    seconds %= 86400
-
-    const hours = Math.floor(seconds / 3600)
-    seconds %= 3600
-
-    const minutes = Math.floor(seconds / 60)
-    seconds %= 60
-
-    const parts = []
-
-    if (days) parts.push(`${days}d`)
-    if (hours) parts.push(`${hours}h`)
-    if (minutes) parts.push(`${minutes}m`)
-
-    parts.push(`${seconds}s`)
-
-    return parts.join(' ')
-}
-
-const downloadMedia = async (msg) => {
-    return await sock.downloadMediaMessage(msg)
-}
-
-function getUser(id) {
-    if (!economy[id]) {
-        economy[id] = {
-            balance: 1000,
-            xp: 0,
-            level: 1,
-            inventory: [],
-            lastDaily: 0,
-            lastWork: 0,
-            lastWeekly: 0
-        }
-    }
-
-    return economy[id]
-}
-
-function addXP(id, amount) {
-    const user = getUser(id)
-
-    user.xp += amount
-    user.level = Math.floor(user.xp / 100) + 1
-
-    saveEco()
-}
-
-async function askAI(prompt) {
-    if (!config.apiKeys.lovable) {
-        return 'AI API key is not configured.'
-    }
-
-    try {
-        const res = await axios.post(
-            config.apiKeys.lovable,
-            {
-                model: 'gpt-4',
-                messages: [
-                    {
-                        role: 'user',
-                        content: prompt
-                    }
-                ]
-            },
-            {
-                timeout: 30000
-            }
-        )
-
-        return (
-            res.data?.reply ||
-            res.data?.response ||
-            res.data?.choices?.[0]?.message?.content ||
-            'No response.'
-        )
-    } catch (e) {
-        return `AI Error: ${e.message}`
-    }
-}
-
-function toSeconds(timestamp) {
-    const parts = timestamp.split(':').map(Number)
-
-    if (parts.length === 3) {
-        return (
-            parts[0] * 3600 +
-            parts[1] * 60 +
-            parts[2]
-        )
-    }
-
-    return parts[0] * 60 + parts[1]
-}
-
-// ============================================================
-// EXPRESS / DASHBOARD
-// ============================================================
+// ───────────────────────────────────────────────────────────────
+// DASHBOARD
+// ───────────────────────────────────────────────────────────────
 
 app.get('/', (req, res) => {
-    const file = './public/dashboard.html'
 
-    if (fs.existsSync(file)) {
-        return res.sendFile(file, { root: '.' })
+    const dashboard =
+        path.join(
+            PUBLIC_DIR,
+            'dashboard.html'
+        )
+
+    if (fs.existsSync(dashboard)) {
+        return res.sendFile(dashboard)
     }
 
     res.send(`
         <html>
-        <head>
-            <title>${config.botName}</title>
-        </head>
-        <body style="background:#111;color:white;font-family:Arial;text-align:center;padding:50px">
-            <h1>🤖 ${config.botName}</h1>
-            <p>WhatsApp Multi-Device Bot</p>
-            <p>Status: ${sock?.user ? 'ONLINE ✅' : 'STARTING...'}</p>
-        </body>
+            <head>
+                <title>${config.botName}</title>
+            </head>
+
+            <body>
+                <h1>${config.botName}</h1>
+                <p>Bot is running.</p>
+                <p>Version: ${config.version}</p>
+            </body>
         </html>
     `)
 })
 
-// ============================================================
-// PAIR PAGE
-// ============================================================
+
+// ───────────────────────────────────────────────────────────────
+// PAIRING PAGE
+// ───────────────────────────────────────────────────────────────
 
 app.get('/pair', (req, res) => {
+
     res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-<title>${config.botName} Pair Code</title>
+    <meta charset="UTF-8">
+    <title>${config.botName} Pair</title>
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: white;
+            text-align: center;
+            padding: 50px 20px;
+        }
 
-<style>
+        input {
+            padding: 14px;
+            width: 280px;
+            max-width: 90%;
+            border-radius: 8px;
+            border: none;
+            margin-bottom: 15px;
+        }
 
-body{
-    font-family:Arial;
-    background:#0f0f0f;
-    color:white;
-    text-align:center;
-    padding:20px;
-}
+        button {
+            padding: 14px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
 
-.box{
-    background:#1a1a1a;
-    padding:30px;
-    border-radius:20px;
-    max-width:400px;
-    margin:auto;
-}
-
-input{
-    width:90%;
-    padding:12px;
-    margin:10px 0;
-    border-radius:10px;
-    border:none;
-    background:#2a2a2a;
-    color:white;
-}
-
-button{
-    width:95%;
-    padding:12px;
-    margin:10px 0;
-    border-radius:10px;
-    border:none;
-    background:black;
-    color:white;
-    font-weight:bold;
-    cursor:pointer;
-}
-
-.code{
-    background:#2a2a2a;
-    padding:15px;
-    border-radius:10px;
-    margin:10px 0;
-    font-size:20px;
-}
-
-</style>
+        #result {
+            margin-top: 25px;
+            font-size: 25px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
 
-<div class="box">
+    <h1>${config.botName}</h1>
 
-<h2>🤖 ${config.botName}</h2>
+    <p>
+        Enter your WhatsApp number with country code.
+    </p>
 
-<p>Link your WhatsApp device</p>
+    <input
+        id="number"
+        placeholder="263783546271"
+    />
 
-<form action="/pair" method="POST">
+    <br>
 
-<input
-type="text"
-name="number"
-placeholder="+263783546271"
-required
->
+    <button onclick="pair()">
+        GET PAIR CODE
+    </button>
 
-<button type="submit">
-🔑 Generate Pair Code
-</button>
+    <div id="result"></div>
 
-</form>
+<script>
 
-<div class="code">
-${latestCode}
-</div>
+async function pair() {
 
-<button onclick="
-navigator.clipboard.writeText(
-document.querySelector('.code').innerText
-)">
-📋 Copy Code
-</button>
+    const number =
+        document.getElementById('number').value.trim()
 
-<p style="font-size:12px">
-© 2026 ${config.ownerName}
-</p>
+    if (!number) {
+        alert('Enter your WhatsApp number')
+        return
+    }
 
-</div>
+    document.getElementById('result').innerText =
+        'Generating...'
+
+    try {
+
+        const response =
+            await fetch(
+                '/pair?number=' +
+                encodeURIComponent(number)
+            )
+
+        const data =
+            await response.json()
+
+        if (data.code) {
+
+            document.getElementById('result').innerText =
+                data.code
+
+        } else {
+
+            document.getElementById('result').innerText =
+                data.error || 'Failed'
+
+        }
+
+    } catch (error) {
+
+        document.getElementById('result').innerText =
+            'Something went wrong'
+
+    }
+}
+
+</script>
 
 </body>
 </html>
 `)
 })
 
-app.post('/pair', async (req, res) => {
-    let number = req.body.number || ''
 
-    number = number.replace(/[^0-9]/g, '')
+// ───────────────────────────────────────────────────────────────
+// PAIRING API
+// ───────────────────────────────────────────────────────────────
 
-    if (!number) {
-        latestCode = 'Invalid number'
-        return res.redirect('/pair')
-    }
-
-    if (!sock) {
-        latestCode = 'Bot is still starting...'
-        return res.redirect('/pair')
-    }
+app.get('/pair', async (req, res) => {
 
     try {
-        const code = await sock.requestPairingCode(number)
 
-        latestCode =
-            code.match(/.{1,4}/g)?.join('-') ||
+        const number =
+            String(req.query.number || '')
+                .replace(/\D/g, '')
+
+        if (!number) {
+            return res.status(400).json({
+                error: 'WhatsApp number is required'
+            })
+        }
+
+        if (!sock) {
+            return res.status(503).json({
+                error: 'Bot is not ready yet'
+            })
+        }
+
+        if (sock.authState?.creds?.registered) {
+
+            return res.json({
+                error:
+                    'This bot is already registered. Delete the session first if you need a new pairing.'
+            })
+        }
+
+        const code =
+            await sock.requestPairingCode(number)
+
+        const formatted =
+            code?.match(/.{1,4}/g)?.join('-') ||
             code
 
-        console.log(
-            `Pairing code generated for ${number}: ${latestCode}`
+        res.json({
+            success: true,
+            code: formatted
+        })
+
+    } catch (error) {
+
+        console.error(
+            '[PAIR ERROR]',
+            error.message
         )
 
-        res.redirect('/pair')
-
-    } catch (e) {
-
-        console.error('Pairing error:', e)
-
-        latestCode = `Error: ${e.message}`
-
-        res.redirect('/pair')
+        res.status(500).json({
+            error:
+                error.message ||
+                'Unable to generate pairing code'
+        })
     }
 })
 
-// ============================================================
-// API
-// ============================================================
 
-app.get('/api/insights', async (req, res) => {
+// ───────────────────────────────────────────────────────────────
+// BOT INSIGHTS
+// ───────────────────────────────────────────────────────────────
+
+app.get('/api/insights', (req, res) => {
+
+    let users = {}
+
+    try {
+        users =
+            JSON.parse(
+                fs.readFileSync(
+                    ECONOMY_FILE,
+                    'utf8'
+                )
+            )
+    } catch {
+        users = {}
+    }
 
     res.json({
-        users: Object.keys(economy).length,
-        ttlBots: 1,
-        onlineBots: sock?.user ? 1 : 0,
-        speed: `${Math.floor(Math.random() * 50 + 50)}ms`,
-        ttlCmds: global.totalCommands,
-        uptime: process.uptime()
+        users: Object.keys(users).length,
+
+        ttlBots:
+            sock ? 1 : 0,
+
+        onlineBots:
+            sock?.user ? 1 : 0,
+
+        totalCommands,
+
+        uptime:
+            process.uptime(),
+
+        version:
+            config.version,
+
+        botName:
+            config.botName,
+
+        mode:
+            BOT_SETTINGS.mode
     })
 })
 
-app.post('/api/command', (req, res) => {
 
-    global.totalCommands++
+// ───────────────────────────────────────────────────────────────
+// COMMAND COUNTER
+// ───────────────────────────────────────────────────────────────
+
+app.get('/api/command', (req, res) => {
+
+    totalCommands++
 
     res.json({
-        status: 'ok'
+        success: true,
+        totalCommands
     })
 })
+
+
+// ───────────────────────────────────────────────────────────────
+// ADD USER
+// ───────────────────────────────────────────────────────────────
 
 app.post('/api/add-user', (req, res) => {
 
-    if (req.body?.number) {
-        getUser(req.body.number)
-        saveEco()
-    }
+    try {
 
-    res.json({
-        status: 'ok'
-    })
+        const {
+            jid,
+            name
+        } = req.body
+
+        if (!jid) {
+            return res.status(400).json({
+                error: 'jid required'
+            })
+        }
+
+        const economy =
+            readJSON(
+                ECONOMY_FILE,
+                {}
+            )
+
+        if (!economy[jid]) {
+
+            economy[jid] = {
+                name:
+                    name || 'User',
+
+                balance: 1000,
+                xp: 0,
+                level: 1
+            }
+
+            writeJSON(
+                ECONOMY_FILE,
+                economy
+            )
+        }
+
+        res.json({
+            success: true
+        })
+
+    } catch (error) {
+
+        res.status(500).json({
+            error:
+                error.message
+        })
+    }
 })
 
-// ============================================================
-// START WEB SERVER
-// ============================================================
+
+// ───────────────────────────────────────────────────────────────
+// START EXPRESS
+// ───────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
-    console.log(`Web server on port ${PORT}`)
+
+    console.log('')
+    console.log('╭──────────────────────────────╮')
+    console.log(`│      ${config.botName} ONLINE       │`)
+    console.log('├──────────────────────────────┤')
+    console.log(`│ Port: ${PORT}`)
+    console.log(`│ Version: ${config.version}`)
+    console.log(`│ Mode: ${config.mode}`)
+    console.log('╰──────────────────────────────╯')
+    console.log('')
 })
 
-// ============================================================
-// START WHATSAPP
-// ============================================================
 
-async function startBot() {
+// ═══════════════════════════════════════════════════════════════
+// JSON HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function readJSON(file, fallback = {}) {
 
     try {
 
-        console.log('🔌 Starting WhatsApp connection...')
+        return JSON.parse(
+            fs.readFileSync(
+                file,
+                'utf8'
+            )
+        )
+
+    } catch {
+
+        return fallback
+    }
+}
+
+
+function writeJSON(file, data) {
+
+    fs.writeFileSync(
+        file,
+        JSON.stringify(
+            data,
+            null,
+            2
+        )
+    )
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════
+
+const BOT_SETTINGS =
+    readJSON(
+        SETTINGS_FILE,
+        {
+            mode: 'public',
+            afk: {},
+            darkeye: false
+        }
+    )
+
+BOT_SETTINGS.afk ??= {}
+BOT_SETTINGS.mode ??= config.mode
+BOT_SETTINGS.darkeye ??= false
+
+
+function saveSettings() {
+
+    writeJSON(
+        SETTINGS_FILE,
+        BOT_SETTINGS
+    )
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ECONOMY
+// ═══════════════════════════════════════════════════════════════
+
+const economy =
+    readJSON(
+        ECONOMY_FILE,
+        {}
+    )
+
+
+function saveEconomy() {
+
+    writeJSON(
+        ECONOMY_FILE,
+        economy
+    )
+}
+
+
+function getUser(jid, name = 'User') {
+
+    if (!economy[jid]) {
+
+        economy[jid] = {
+            name,
+            balance: 1000,
+            xp: 0,
+            level: 1
+        }
+
+        saveEconomy()
+    }
+
+    return economy[jid]
+}
+
+
+function addXP(jid, amount = 1) {
+
+    const user =
+        getUser(jid)
+
+    user.xp += amount
+
+    const required =
+        user.level * 100
+
+    if (user.xp >= required) {
+
+        user.xp -= required
+        user.level++
+
+        return true
+    }
+
+    saveEconomy()
+
+    return false
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// GROUP SETTINGS
+// ═══════════════════════════════════════════════════════════════
+
+const groupSettings = {}
+
+
+// ═══════════════════════════════════════════════════════════════
+// BOT STATE
+// ═══════════════════════════════════════════════════════════════
+
+let sock = null
+
+let reconnecting = false
+
+let totalCommands = 0
+
+const startTime =
+    Date.now()
+
+
+// ═══════════════════════════════════════════════════════════════
+// UTILITY FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function formatUptime(seconds) {
+
+    seconds =
+        Math.floor(seconds)
+
+    const days =
+        Math.floor(seconds / 86400)
+
+    seconds %= 86400
+
+    const hours =
+        Math.floor(seconds / 3600)
+
+    seconds %= 3600
+
+    const minutes =
+        Math.floor(seconds / 60)
+
+    seconds %= 60
+
+    return [
+        days ? `${days}d` : '',
+        hours ? `${hours}h` : '',
+        minutes ? `${minutes}m` : '',
+        `${seconds}s`
+    ]
+        .filter(Boolean)
+        .join(' ')
+}
+
+
+function getText(message) {
+
+    if (!message?.message) {
+        return ''
+    }
+
+    const msg =
+        message.message
+
+    return (
+        msg.conversation ||
+
+        msg.extendedTextMessage?.text ||
+
+        msg.imageMessage?.caption ||
+
+        msg.videoMessage?.caption ||
+
+        msg.documentMessage?.caption ||
+
+        ''
+    )
+}
+
+
+function getSender(m) {
+
+    return (
+        m.key.participant ||
+        m.key.remoteJid ||
+        ''
+    )
+}
+
+
+function isGroupJid(jid) {
+
+    return jid?.endsWith('@g.us')
+}
+
+
+function getMentionedJids(m) {
+
+    return (
+        m.message
+            ?.extendedTextMessage
+            ?.contextInfo
+            ?.mentionedJid || []
+    )
+}
+
+
+async function isAdmin(
+    jid,
+    groupJid
+) {
+
+    try {
+
+        if (!isGroupJid(groupJid)) {
+            return false
+        }
+
+        const metadata =
+            await sock.groupMetadata(
+                groupJid
+            )
+
+        const participant =
+            metadata.participants.find(
+                p => p.id === jid
+            )
+
+        return Boolean(
+            participant?.admin
+        )
+
+    } catch {
+
+        return false
+    }
+}
+
+
+async function isBotAdmin(groupJid) {
+
+    try {
+
+        if (!sock?.user?.id) {
+            return false
+        }
+
+        return await isAdmin(
+            sock.user.id.split(':')[0] +
+            '@s.whatsapp.net',
+            groupJid
+        )
+
+    } catch {
+
+        return false
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// MESSAGE REPLY
+// ═══════════════════════════════════════════════════════════════
+
+async function reply(
+    text,
+    m
+) {
+
+    if (!sock || !m) {
+        return
+    }
+
+    return sock.sendMessage(
+        m.key.remoteJid,
+        {
+            text
+        },
+        {
+            quoted: m
+        }
+    )
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// WELCOME / GOODBYE
+// ═══════════════════════════════════════════════════════════════
+
+async function handleGroupParticipantsUpdate(update) {
+
+    try {
+
+        const {
+            id,
+            participants,
+            action
+        } = update
+
+        if (!isGroupJid(id)) {
+            return
+        }
+
+        if (!groupSettings[id]?.welcome) {
+            return
+        }
+
+        for (const participant of participants) {
+
+            const number =
+                participant.split('@')[0]
+
+            if (action === 'add') {
+
+                await sock.sendMessage(
+                    id,
+                    {
+                        text:
+                            `╭───❒ *WELCOME* ❒───╮
+│ 👋 Welcome @${number}
+│ 🤖 ${config.botName}
+╰────────────────────❒
+
+${config.watermark}`,
+                        mentions: [
+                            participant
+                        ]
+                    }
+                )
+            }
+
+            if (action === 'remove') {
+
+                await sock.sendMessage(
+                    id,
+                    {
+                        text:
+                            `╭───❒ *GOODBYE* ❒───╮
+│ 👋 Goodbye @${number}
+│ 🤖 ${config.botName}
+╰────────────────────❒
+
+${config.watermark}`,
+                        mentions: [
+                            participant
+                        ]
+                    }
+                )
+            }
+        }
+
+    } catch (error) {
+
+        console.error(
+            '[WELCOME ERROR]',
+            error.message
+        )
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// AFK HANDLER
+// ═══════════════════════════════════════════════════════════════
+
+async function handleAFK(
+    m,
+    from,
+    sender
+) {
+
+    const afk =
+        BOT_SETTINGS.afk || {}
+
+    // Sender returns from AFK
+    if (afk[sender]) {
+
+        const old =
+            afk[sender]
+
+        delete afk[sender]
+
+        saveSettings()
+
+        await reply(
+            `╭───❒ *AFK* ❒───╮
+│ Welcome back!
+│ You were AFK for:
+│ ${formatUptime(
+    (Date.now() - old.time) / 1000
+)}
+╰────────────────❒`,
+            m
+        )
+    }
+
+    // Check mentioned users
+    const mentions =
+        getMentionedJids(m)
+
+    for (const jid of mentions) {
+
+        if (!afk[jid]) {
+            continue
+        }
+
+        const data =
+            afk[jid]
+
+        const duration =
+            formatUptime(
+                (Date.now() - data.time) / 1000
+            )
+
+        await reply(
+            `╭───❒ *AFK USER* ❒───╮
+│ 👤 @${jid.split('@')[0]}
+│ 💬 ${data.reason || 'AFK'}
+│ ⏱️ ${duration}
+╰────────────────────❒`,
+            m
+        )
+
+        break
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ANTI-LINK
+// ═══════════════════════════════════════════════════════════════
+
+async function handleAntiLink(
+    m,
+    from,
+    sender,
+    body
+) {
+
+    if (!isGroupJid(from)) {
+        return false
+    }
+
+    if (!groupSettings[from]?.antilink) {
+        return false
+    }
+
+    if (!body.includes('chat.whatsapp.com')) {
+        return false
+    }
+
+    const admin =
+        await isAdmin(
+            sender,
+            from
+        )
+
+    if (admin) {
+        return false
+    }
+
+    const botAdmin =
+        await isBotAdmin(from)
+
+    if (!botAdmin) {
+
+        await reply(
+            '⚠️ Anti-link is enabled, but I need admin permission to delete links.',
+            m
+        )
+
+        return true
+    }
+
+    try {
+
+        await sock.sendMessage(
+            from,
+            {
+                delete: m.key
+            }
+        )
+
+        await reply(
+            `╭───❒ *ANTI-LINK* ❒───╮
+│ 🚫 WhatsApp group links
+│ are not allowed here.
+╰──────────────────────❒`,
+            m
+        )
+
+    } catch (error) {
+
+        console.error(
+            '[ANTILINK]',
+            error.message
+        )
+    }
+
+    return true
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// COMMAND PROCESSOR
+// ═══════════════════════════════════════════════════════════════
+
+async function processMessage(
+    m
+) {
+
+    try {
+
+        if (!m?.message) {
+            return
+        }
+
+        const from =
+            m.key.remoteJid
+
+        if (!from) {
+            return
+        }
+
+        if (m.key.fromMe) {
+            return
+        }
+
+        const sender =
+            getSender(m)
+
+        const body =
+            getText(m).trim()
+
+        if (!body) {
+            return
+        }
+
+
+        // ───────────────────────────────────────────────────────
+        // AFK
+        // ───────────────────────────────────────────────────────
+
+        await handleAFK(
+            m,
+            from,
+            sender
+        )
+
+
+        // ───────────────────────────────────────────────────────
+        // ANTI-LINK
+        // ───────────────────────────────────────────────────────
+
+        const blocked =
+            await handleAntiLink(
+                m,
+                from,
+                sender,
+                body
+            )
+
+        if (blocked) {
+            return
+        }
+
+
+        // ───────────────────────────────────────────────────────
+        // PREFIX
+        // ───────────────────────────────────────────────────────
+
+        const prefix =
+            config.prefix
+
+        if (!body.startsWith(prefix)) {
+            return
+        }
+
+
+        // ───────────────────────────────────────────────────────
+        // PARSE COMMAND
+        // ───────────────────────────────────────────────────────
+
+        const withoutPrefix =
+            body.slice(prefix.length).trim()
+
+        if (!withoutPrefix) {
+            return
+        }
+
+        const parts =
+            withoutPrefix.split(/\s+/)
+
+        const cmd =
+            parts.shift()
+                .toLowerCase()
+
+        const args =
+            parts
+
+        const text =
+            args.join(' ')
+
+
+        // ───────────────────────────────────────────────────────
+        // GROUP
+        // ───────────────────────────────────────────────────────
+
+        const isGroup =
+            isGroupJid(from)
+
+
+        // ───────────────────────────────────────────────────────
+        // OWNER
+        // ───────────────────────────────────────────────────────
+
+        const isOwner =
+            sender === OWNER_JID ||
+            sender.split(':')[0] === OWNER_NUM
+
+
+        // ───────────────────────────────────────────────────────
+        // ADMIN
+        // ───────────────────────────────────────────────────────
+
+        let senderIsAdmin = false
+
+        if (isGroup) {
+
+            senderIsAdmin =
+                await isAdmin(
+                    sender,
+                    from
+                )
+        }
+
+
+        // ───────────────────────────────────────────────────────
+        // USER
+        // ───────────────────────────────────────────────────────
+
+        const pushName =
+            m.pushName ||
+            'User'
+
+        const user =
+            getUser(
+                sender,
+                pushName
+            )
+
+
+        // ───────────────────────────────────────────────────────
+        // COMMAND CONTEXT
+        // ───────────────────────────────────────────────────────
+
+        const context = {
+
+            // Baileys
+            sock,
+            m,
+
+            // Message
+            from,
+            sender,
+            body,
+
+            // Command
+            cmd,
+            args,
+            text,
+
+            // Bot
+            config,
+            prefix,
+
+            // Owner
+            OWNER_NUM,
+            OWNER_JID,
+            isOwner,
+
+            // Group
+            isGroup,
+            isAdmin: senderIsAdmin,
+
+            isBotAdmin:
+                isGroup
+                    ? await isBotAdmin(from)
+                    : false,
+
+            groupSettings,
+
+            // User
+            user,
+
+            getUser,
+            addXP,
+            saveEconomy,
+
+            // Settings
+            BOT_SETTINGS,
+            saveSettings,
+
+            // Utilities
+            reply: text =>
+                reply(text, m),
+
+            getText,
+            getMentionedJids,
+
+            formatUptime,
+
+            // Paths
+            ROOT,
+            DATABASE_DIR,
+            TMP_DIR,
+            SESSION_DIR,
+
+            // Stats
+            get totalCommands() {
+                return totalCommands
+            }
+        }
+
+
+        // ───────────────────────────────────────────────────────
+        // SEND TO COMMAND HANDLER
+        // ───────────────────────────────────────────────────────
+
+        const executed =
+            await handleCommand(
+                context
+            )
+
+        if (executed) {
+
+            totalCommands++
+
+            // Dashboard counter
+            try {
+
+                await axios.post(
+                    `${config.dashboardUrl}/api/command`
+                )
+
+            } catch {
+                // Dashboard may be unavailable.
+                // Do not break the bot.
+            }
+        }
+
+    } catch (error) {
+
+        console.error(
+            '[MESSAGE ERROR]',
+            error
+        )
+
+        try {
+
+            await reply(
+                `❌ *Command Error*\n\n${error.message}`,
+                m
+            )
+
+        } catch {
+            // Ignore reply failure
+        }
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// START WHATSAPP
+// ═══════════════════════════════════════════════════════════════
+
+async function startBot() {
+
+    if (reconnecting) {
+        return
+    }
+
+    try {
 
         const {
             state,
             saveCreds
-        } = await useMultiFileAuthState('session')
+        } =
+            await useMultiFileAuthState(
+                SESSION_DIR
+            )
 
         const {
             version
-        } = await fetchLatestBaileysVersion()
+        } =
+            await fetchLatestBaileysVersion()
 
-        sock = makeWASocket({
+        console.log(
+            `Using WhatsApp version ${version.join('.')}`
+        )
 
-            version,
 
-            logger: P({
-                level: 'error'
-            }),
+        sock =
+            makeWASocket({
 
-            auth: state,
+                version,
 
-            browser: Browsers.ubuntu('Firefox'),
+                auth: state,
 
-            markOnlineOnConnect: true,
+                logger:
+                    pino({
+                        level: 'silent'
+                    }),
 
-            syncFullHistory: false
+                printQRInTerminal: false,
 
-        })
+                browser:
+                    Browsers.ubuntu(
+                        'Firefox'
+                    ),
+
+                generateHighQualityLinkPreview:
+                    true,
+
+                markOnlineOnConnect:
+                    true
+            })
+
+
+        // ───────────────────────────────────────────────────────
+        // SAVE AUTH
+        // ───────────────────────────────────────────────────────
 
         sock.ev.on(
             'creds.update',
             saveCreds
         )
 
-        // ====================================================
-        // CONNECTION
-        // ====================================================
+
+        // ───────────────────────────────────────────────────────
+        // CONNECTION UPDATE
+        // ───────────────────────────────────────────────────────
 
         sock.ev.on(
             'connection.update',
-            async (update) => {
+            async update => {
 
                 const {
                     connection,
                     lastDisconnect
                 } = update
 
+
+                if (connection === 'connecting') {
+
+                    console.log(
+                        '⏳ Connecting to WhatsApp...'
+                    )
+                }
+
+
+                if (connection === 'open') {
+
+                    reconnecting = false
+
+                    console.log('')
+                    console.log(
+                        '╭──────────────────────────────╮'
+                    )
+                    console.log(
+                        `│       ${config.botName} CONNECTED      │`
+                    )
+                    console.log(
+                        '├──────────────────────────────┤'
+                    )
+                    console.log(
+                        `│ Version: ${config.version}`
+                    )
+                    console.log(
+                        `│ Mode: ${BOT_SETTINGS.mode}`
+                    )
+                    console.log(
+                        `│ Uptime: ${formatUptime(
+                            process.uptime()
+                        )}`
+                    )
+                    console.log(
+                        '╰──────────────────────────────╯'
+                    )
+                    console.log('')
+
+
+                    // Add connected bot/user
+                    try {
+
+                        if (sock.user?.id) {
+
+                            await axios.post(
+                                `${config.dashboardUrl}/api/add-user`,
+                                {
+                                    jid:
+                                        sock.user.id
+                                            .split(':')[0]
+                                            .replace(
+                                                '@s.whatsapp.net',
+                                                ''
+                                            ) +
+                                        '@s.whatsapp.net',
+
+                                    name:
+                                        sock.user.name ||
+                                        config.botName
+                                }
+                            )
+                        }
+
+                    } catch {
+                        // Dashboard unavailable
+                    }
+                }
+
+
                 if (connection === 'close') {
 
                     const statusCode =
-                        lastDisconnect?.error?.output?.statusCode
+                        lastDisconnect
+                            ?.error
+                            ?.output
+                            ?.statusCode
 
-                    console.log(
-                        `WhatsApp connection closed. Code: ${statusCode}`
-                    )
 
                     const shouldReconnect =
-                        statusCode !== DisconnectReason.loggedOut
+                        statusCode !==
+                        DisconnectReason.loggedOut
+
+
+                    console.log(
+                        `❌ WhatsApp disconnected. Code: ${statusCode}`
+                    )
+
 
                     if (shouldReconnect) {
 
+                        reconnecting = true
+
                         console.log(
-                            '🔄 Reconnecting in 3 seconds...'
+                            '🔄 Reconnecting in 5 seconds...'
                         )
 
                         setTimeout(
-                            startBot,
-                            3000
-                        )
-                    }
+                            () => {
 
-                } else if (connection === 'open') {
+                                reconnecting = false
 
-                    console.log(
-                        `${config.botName} IS CONNECTED ✅`
-                    )
+                                startBot()
 
-                    try {
-
-                        const number =
-                            sock.user?.id
-                                ?.split(':')[0]
-                                ?.replace('@s.whatsapp.net', '')
-
-                        await axios.post(
-                            `${DASHBOARD_URL}/api/add-user`,
-                            {
-                                number,
-                                name:
-                                    sock.user?.name ||
-                                    'Unknown'
-                            }
+                            },
+                            5000
                         )
 
-                    } catch (e) {
+                    } else {
 
                         console.log(
-                            'Dashboard sync skipped:',
-                            e.message
+                            '❌ Logged out. Delete the session folder and pair again.'
                         )
                     }
                 }
             }
         )
 
-        // ====================================================
-        // GROUP PARTICIPANTS
-        // ====================================================
 
-        sock.ev.on(
-            'group-participants.update',
-            async (update) => {
-
-                try {
-
-                    if (
-                        !groupSettings[update.id]?.welcome
-                    ) {
-                        return
-                    }
-
-                    const meta =
-                        await sock.groupMetadata(
-                            update.id
-                        )
-
-                    for (
-                        const participant
-                        of update.participants
-                    ) {
-
-                        if (update.action === 'add') {
-
-                            const pp =
-                                await sock
-                                    .profilePictureUrl(
-                                        participant,
-                                        'image'
-                                    )
-                                    .catch(
-                                        () =>
-                                            'https://i.imgur.com/2WZl0Q3.png'
-                                    )
-
-                            await sock.sendMessage(
-                                update.id,
-                                {
-                                    image: {
-                                        url: pp
-                                    },
-
-                                    caption:
-                                        boxMenu(
-                                            'WELCOME',
-                                            [
-                                                `Welcome to ${meta.subject}`,
-                                                `You are member no: ${meta.participants.length}`
-                                            ]
-                                        ) +
-                                        `\n${WM}`,
-
-                                    mentions: [
-                                        participant
-                                    ]
-                                }
-                            )
-                        }
-
-                        if (
-                            update.action ===
-                            'remove'
-                        ) {
-
-                            const pp =
-                                await sock
-                                    .profilePictureUrl(
-                                        participant,
-                                        'image'
-                                    )
-                                    .catch(
-                                        () =>
-                                            'https://i.imgur.com/2WZl0Q3.png'
-                                    )
-
-                            await sock.sendMessage(
-                                update.id,
-                                {
-                                    image: {
-                                        url: pp
-                                    },
-
-                                    caption:
-                                        boxMenu(
-                                            'GOODBYE',
-                                            [
-                                                `Goodbye @${participant.split('@')[0]}`,
-                                                `We will miss you from ${meta.subject}`
-                                            ]
-                                        ) +
-                                        `\n${WM}`,
-
-                                    mentions: [
-                                        participant
-                                    ]
-                                }
-                            )
-                        }
-                    }
-
-                } catch (e) {
-
-                    console.error(
-                        'Group participant error:',
-                        e
-                    )
-                }
-            }
-        )
-
-        // ====================================================
-        // MESSAGE HANDLER
-        // ====================================================
+        // ───────────────────────────────────────────────────────
+        // MESSAGES
+        // ───────────────────────────────────────────────────────
 
         sock.ev.on(
             'messages.upsert',
-            async ({ messages }) => {
-
-                try {
-
-                    if (
-                        !messages?.length ||
-                        !messages[0]?.message
-                    ) {
-                        return
-                    }
-
-                    const m = messages[0]
-
-                    if (m.key.fromMe) {
-                        return
-                    }
-
-                    if (
-                        m.key.remoteJid ===
-                        'status@broadcast'
-                    ) {
-                        return
-                    }
-
-                    const from =
-                        m.key.remoteJid
-
-                    const sender =
-                        m.key.participant ||
-                        m.key.remoteJid
-
-                    const body =
-                        m.message?.conversation ||
-                        m.message?.extendedTextMessage?.text ||
-                        m.message?.imageMessage?.caption ||
-                        m.message?.videoMessage?.caption ||
-                        m.message?.documentMessage?.caption ||
-                        ''
-
-                    const isCmd =
-                        body.startsWith(PREFIX)
-
-                    const args =
-                        body
-                            .slice(PREFIX.length)
-                            .trim()
-                            .split(/\s+/)
-                            .filter(Boolean)
-
-                    const cmd =
-                        args.shift()?.toLowerCase()
-
-                    const reply = (
-                        text,
-                        opts = {}
-                    ) =>
-                        sock.sendMessage(
-                            from,
-                            {
-                                text,
-                                ...opts
-                            },
-                            {
-                                quoted: m
-                            }
-                        )
-
-                    const isOwner =
-                        sender === OWNER_JID
-
-                    const isGroup =
-                        from.endsWith('@g.us')
-
-                    const isAdmin = async () => {
-
-                        if (!isGroup) {
-                            return false
-                        }
-
-                        const meta =
-                            await sock
-                                .groupMetadata(from)
-                                .catch(
-                                    () => null
-                                )
-
-                        if (!meta) {
-                            return false
-                        }
-
-                        const participant =
-                            meta.participants.find(
-                                p =>
-                                    p.id ===
-                                    sender
-                            )
-
-                        return Boolean(
-                            participant?.admin
-                        )
-                    }
-
-                    // =================================================
-                    // AFK
-                    // =================================================
-
-                    BOT_SETTINGS.afk ??= {}
-
-                    if (
-                        BOT_SETTINGS.afk[sender]
-                    ) {
-
-                        delete BOT_SETTINGS.afk[
-                            sender
-                        ]
-
-                        saveSettings()
-
-                        await reply(
-                            boxMenu(
-                                'WELCOME BACK',
-                                [
-                                    'You are no longer AFK'
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-                    }
-
-                    const mentionedJid =
-                        m.message
-                            ?.extendedTextMessage
-                            ?.contextInfo
-                            ?.mentionedJid || []
-
-                    if (
-                        mentionedJid.length
-                    ) {
-
-                        for (
-                            const jid
-                            of mentionedJid
-                        ) {
-
-                            if (
-                                BOT_SETTINGS.afk[jid]
-                            ) {
-
-                                const afk =
-                                    BOT_SETTINGS.afk[jid]
-
-                                const time =
-                                    Math.floor(
-                                        (
-                                            Date.now() -
-                                            afk.time
-                                        ) /
-                                        1000 /
-                                        60
-                                    )
-
-                                await reply(
-                                    boxMenu(
-                                        'AFK',
-                                        [
-                                            `@${jid.split('@')[0]} is AFK`,
-                                            `Reason: ${afk.reason}`,
-                                            `For: ${time} minutes`
-                                        ]
-                                    ) +
-                                    `\n${WM}`,
-                                    {
-                                        mentions: [
-                                            jid
-                                        ]
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // =================================================
-                    // ANTILINK
-                    // =================================================
-
-                    if (
-                        isGroup &&
-                        groupSettings[from]?.antilink &&
-                        body.includes(
-                            'chat.whatsapp.com'
-                        )
-                    ) {
-
-                        if (await isAdmin()) {
-                            return
-                        }
-
-                        await sock.sendMessage(
-                            from,
-                            {
-                                delete: m.key
-                            }
-                        )
-
-                        await reply(
-                            boxMenu(
-                                'ANTILINK',
-                                [
-                                    'WhatsApp group links are not allowed.'
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    if (!isCmd) {
-                        return
-                    }
-
-                    global.totalCommands++
-
-                    // =================================================
-                    // DASHBOARD COMMAND COUNTER
-                    // =================================================
-
-                    try {
-
-                        await axios.post(
-                            `${DASHBOARD_URL}/api/command`,
-                            {}
-                        )
-
-                    } catch (e) {}
-
-                    // =================================================
-                    // MENU
-                    // =================================================
-
-                    if (cmd === 'menu') {
-
-                        const uptime =
-                            formatUptime(
-                                process.uptime()
-                            )
-
-                        const menu = `*╔═══❰ SKYPER-MD ❱═══╗*
-*║* 👑 *OWNER:* @${OWNER_NUM}
-*║* 🤖 *VERSION:* ${VERSION}
-*║* ⚖️ *UPTIME:* ${uptime}
-*╚══════════════════╝*
-
-*╭───❰ OWNER ❱───╮*
-│ ${PREFIX}mode
-│ ${PREFIX}public
-│ ${PREFIX}private
-│ ${PREFIX}groups
-│ ${PREFIX}inbox
-*╰────────────╯*
-
-*╭───❰ SYSTEM ❱───╮*
-│ ${PREFIX}alive
-│ ${PREFIX}ping
-│ ${PREFIX}uptime
-│ ${PREFIX}update
-│ ${PREFIX}repo
-│ ${PREFIX}menu
-*╰─────────────╯*
-
-*╭────❰ GROUP ❱────╮*
-│ ${PREFIX}glink
-│ ${PREFIX}tagall
-│ ${PREFIX}groupinfo
-│ ${PREFIX}listadmin
-│ ${PREFIX}kick
-│ ${PREFIX}close
-│ ${PREFIX}open
-│ ${PREFIX}setgname
-│ ${PREFIX}del
-│ ${PREFIX}antilink
-│ ${PREFIX}antimention
-*╰────────────╯*
-
-*╭────❰ DOWNLOAD ❱───╮*
-│ ${PREFIX}song
-│ ${PREFIX}play
-│ ${PREFIX}video
-│ ${PREFIX}movie
-*╰───────────────╯*
-
-*╭───❰ AI ❱───╮*
-│ ${PREFIX}ai
-│ ${PREFIX}meta
-*╰───────────╯*
-
-*╭───❰ SETTINGS ❱───╮*
-│ ${PREFIX}listsudo
-│ ${PREFIX}addsudo
-│ ${PREFIX}antidelete
-│ ${PREFIX}autoread
-│ ${PREFIX}autotyping
-*╰───────────────╯*
-
-> *©𝑝𝑜𝑤𝑒𝑟𝑒𝑑 𝑏𝑦 𝐃𝐀𝐑𝐊 𝐄𝐘𝐄 𝐎𝐅𝐂 𝐃𝐄𝐕*`
-
-                        await sock.sendMessage(
-                            from,
-                            {
-                                text: menu,
-                                mentions: [
-                                    OWNER_JID
-                                ]
-                            },
-                            {
-                                quoted: m
-                            }
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // PING
-                    // =================================================
-
-                    if (cmd === 'ping') {
-
-                        const start =
-                            Date.now()
-
-                        const speed =
-                            Date.now() -
-                            start
-
-                        await reply(
-                            boxMenu(
-                                'PING',
-                                [
-                                    `Speed: ${speed}ms`,
-                                    'Status: ONLINE ✅'
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // ALIVE
-                    // =================================================
-
-                    if (cmd === 'alive') {
-
-                        await reply(
-                            boxMenu(
-                                'SKYPER-MD',
-                                [
-                                    'Bot is alive ✅',
-                                    `Version: ${VERSION}`,
-                                    `Uptime: ${formatUptime(process.uptime())}`,
-                                    `Mode: ${BOT_SETTINGS.mode}`
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // UPTIME
-                    // =================================================
-
-                    if (cmd === 'uptime') {
-
-                        await reply(
-                            boxMenu(
-                                'UPTIME',
-                                [
-                                    formatUptime(
-                                        process.uptime()
-                                    )
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // OWNER
-                    // =================================================
-
-                    if (cmd === 'owner') {
-
-                        await reply(
-                            boxMenu(
-                                'OWNER INFO',
-                                [
-                                    `Name: ${OWNER}`,
-                                    `Number: +${OWNER_NUM}`
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // STATUS
-                    // =================================================
-
-                    if (cmd === 'status') {
-
-                        const uptime =
-                            Math.floor(
-                                process.uptime() /
-                                60
-                            )
-
-                        const ram =
-                            (
-                                process
-                                    .memoryUsage()
-                                    .heapUsed /
-                                1024 /
-                                1024
-                            ).toFixed(2)
-
-                        await reply(
-                            boxMenu(
-                                'BOT STATUS',
-                                [
-                                    'Status: ONLINE ✅',
-                                    `Uptime: ${uptime} minutes`,
-                                    `RAM: ${ram} MB`
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // JOKE
-                    // =================================================
-
-                    if (cmd === 'joke') {
-
-                        const jokes = [
-                            "Why don't skeletons fight each other? They don't have the guts.",
-                            "Why did the computer go to the doctor? It had a virus.",
-                            "Why was the phone wearing glasses? It lost its contacts."
-                        ]
-
-                        const joke =
-                            jokes[
-                                Math.floor(
-                                    Math.random() *
-                                    jokes.length
-                                )
-                            ]
-
-                        await reply(
-                            boxMenu(
-                                'JOKE 😂',
-                                [joke]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // STICKER
-                    // =================================================
-
-                    if (
-                        cmd === 's' ||
-                        cmd === 'sticker'
-                    ) {
-
-                        const imageMessage =
-                            m.message
-                                ?.imageMessage
-
-                        const quotedMessage =
-                            m.message
-                                ?.extendedTextMessage
-                                ?.contextInfo
-                                ?.quotedMessage
-
-                        if (
-                            !imageMessage &&
-                            !quotedMessage?.imageMessage
-                        ) {
-
-                            return reply(
-                                boxMenu(
-                                    'STICKER',
-                                    [
-                                        `Send or reply to an image with ${PREFIX}s`
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        try {
-
-                            let media
-
-                            if (imageMessage) {
-
-                                media =
-                                    await downloadMedia(
-                                        m
-                                    )
-
-                            } else {
-
-                                const quoted = {
-                                    message:
-                                        quotedMessage
-                                }
-
-                                media =
-                                    await downloadMedia(
-                                        quoted
-                                    )
-                            }
-
-                            const sticker =
-                                new Sticker(
-                                    media,
-                                    {
-                                        pack:
-                                            'SKYPER-MD',
-                                        author:
-                                            OWNER,
-                                        type:
-                                            StickerTypes.FULL
-                                    }
-                                )
-
-                            await sock.sendMessage(
-                                from,
-                                await sticker.toMessage(),
-                                {
-                                    quoted: m
-                                }
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'STICKER ERROR',
-                                    [
-                                        e.message
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // DATE
-                    // =================================================
-
-                    if (cmd === 'date') {
-
-                        await reply(
-                            boxMenu(
-                                'DATE',
-                                [
-                                    `Today: ${moment().format(
-                                        'dddd, DD MMMM YYYY'
-                                    )}`
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // QR
-                    // =================================================
-
-                    if (cmd === 'qr') {
-
-                        const text =
-                            args.join(' ')
-
-                        if (!text) {
-
-                            return reply(
-                                boxMenu(
-                                    'QR',
-                                    [
-                                        `Usage: ${PREFIX}qr <text>`
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        try {
-
-                            const qr =
-                                await QRCode.toBuffer(
-                                    text
-                                )
-
-                            await sock.sendMessage(
-                                from,
-                                {
-                                    image: qr,
-                                    caption:
-                                        boxMenu(
-                                            'QR CODE',
-                                            [text]
-                                        ) +
-                                        `\n${WM}`
-                                },
-                                {
-                                    quoted: m
-                                }
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'QR ERROR',
-                                    [e.message]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // GOOGLE
-                    // =================================================
-
-                    if (cmd === 'google') {
-
-                        const query =
-                            args.join(' ')
-
-                        if (!query) {
-
-                            return reply(
-                                boxMenu(
-                                    'GOOGLE',
-                                    [
-                                        `Usage: ${PREFIX}google <query>`
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        try {
-
-                            const res =
-                                await axios.get(
-                                    `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`,
-                                    {
-                                        timeout: 15000
-                                    }
-                                )
-
-                            const answer =
-                                res.data?.AbstractText ||
-                                res.data?.Answer ||
-                                res.data
-                                    ?.RelatedTopics?.[0]
-                                    ?.Text ||
-                                'No result found.'
-
-                            await reply(
-                                boxMenu(
-                                    'GOOGLE',
-                                    [
-                                        `Query: ${query}`,
-                                        `Result: ${answer}`
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'GOOGLE ERROR',
-                                    [
-                                        e.message
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // PLAY / SONG
-                    // =================================================
-
-                    if (
-                        cmd === 'play' ||
-                        cmd === 'song'
-                    ) {
-
-                        const query =
-                            args.join(' ')
-
-                        if (!query) {
-
-                            return reply(
-                                boxMenu(
-                                    'DOWNLOAD',
-                                    [
-                                        `Usage: ${PREFIX}${cmd} <song name>`
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        try {
-
-                            const search =
-                                await yts(query)
-
-                            if (
-                                !search.videos?.length
-                            ) {
-
-                                return reply(
-                                    boxMenu(
-                                        'DOWNLOAD',
-                                        [
-                                            'No results found.'
-                                        ]
-                                    ) +
-                                    `\n${WM}`
-                                )
-                            }
-
-                            const song =
-                                search.videos[0]
-
-                            const file =
-                                `./tmp/${Date.now()}.mp3`
-
-                            await reply(
-                                boxMenu(
-                                    'DOWNLOADING AUDIO',
-                                    [
-                                        song.title
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-
-                            const stream =
-                                ytdl(
-                                    song.url,
-                                    {
-                                        filter:
-                                            'audioonly',
-                                        quality:
-                                            'highestaudio'
-                                    }
-                                )
-
-                            const output =
-                                fs.createWriteStream(
-                                    file
-                                )
-
-                            stream.pipe(output)
-
-                            output.on(
-                                'finish',
-                                async () => {
-
-                                    try {
-
-                                        await sock.sendMessage(
-                                            from,
-                                            {
-                                                audio: {
-                                                    url: file
-                                                },
-                                                mimetype:
-                                                    'audio/mpeg',
-                                                fileName:
-                                                    `${song.title}.mp3`
-                                            },
-                                            {
-                                                quoted: m
-                                            }
-                                        )
-
-                                    } catch (e) {
-
-                                        console.error(
-                                            'Audio send error:',
-                                            e
-                                        )
-
-                                    } finally {
-
-                                        if (
-                                            fs.existsSync(
-                                                file
-                                            )
-                                        ) {
-                                            fs.unlinkSync(
-                                                file
-                                            )
-                                        }
-                                    }
-                                }
-                            )
-
-                            stream.on(
-                                'error',
-                                async (e) => {
-
-                                    if (
-                                        fs.existsSync(
-                                            file
-                                        )
-                                    ) {
-                                        fs.unlinkSync(
-                                            file
-                                        )
-                                    }
-
-                                    await reply(
-                                        boxMenu(
-                                            'DOWNLOAD ERROR',
-                                            [
-                                                e.message
-                                            ]
-                                        ) +
-                                        `\n${WM}`
-                                    )
-                                }
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'DOWNLOAD ERROR',
-                                    [
-                                        e.message
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // KICK
-                    // =================================================
-
-                    if (cmd === 'kick') {
-
-                        if (!isGroup) {
-
-                            return reply(
-                                boxMenu(
-                                    'ERROR',
-                                    [
-                                        'This command is for groups only.'
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        if (
-                            !(await isAdmin())
-                        ) {
-
-                            return reply(
-                                boxMenu(
-                                    'ERROR',
-                                    [
-                                        'Only group admins can use this command.'
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        const users =
-                            m.message
-                                ?.extendedTextMessage
-                                ?.contextInfo
-                                ?.mentionedJid ||
-                            []
-
-                        if (!users.length) {
-
-                            return reply(
-                                boxMenu(
-                                    'KICK',
-                                    [
-                                        'Mention the user you want to remove.'
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        try {
-
-                            await sock.groupParticipantsUpdate(
-                                from,
-                                users,
-                                'remove'
-                            )
-
-                            await reply(
-                                boxMenu(
-                                    'KICKED',
-                                    [
-                                        `Removed: ${users.length} user(s)`
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'KICK ERROR',
-                                    [
-                                        e.message
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // TAG ALL
-                    // =================================================
-
-                    if (cmd === 'tagall') {
-
-                        if (!isGroup) {
-
-                            return reply(
-                                boxMenu(
-                                    'ERROR',
-                                    [
-                                        'This command is for groups only.'
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        try {
-
-                            const meta =
-                                await sock.groupMetadata(
-                                    from
-                                )
-
-                            const participants =
-                                meta.participants.map(
-                                    p => p.id
-                                )
-
-                            const text =
-                                args.join(' ') ||
-                                'Attention everyone!'
-
-                            const mentions =
-                                participants
-                                    .map(
-                                        p =>
-                                            `@${p.split('@')[0]}`
-                                    )
-                                    .join(' ')
-
-                            await sock.sendMessage(
-                                from,
-                                {
-                                    text:
-                                        boxMenu(
-                                            'TAG ALL',
-                                            [text]
-                                        ) +
-                                        `\n${mentions}\n\n${WM}`,
-
-                                    mentions:
-                                        participants
-                                },
-                                {
-                                    quoted: m
-                                }
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'TAGALL ERROR',
-                                    [
-                                        e.message
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // AI
-                    // =================================================
-
-                    if (
-                        [
-                            'ai',
-                            'chatgpt',
-                            'gpt4'
-                        ].includes(cmd)
-                    ) {
-
-                        const prompt =
-                            args.join(' ')
-
-                        if (!prompt) {
-
-                            return reply(
-                                boxMenu(
-                                    'AI',
-                                    [
-                                        `Usage: ${PREFIX}ai <question>`
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        const result =
-                            await askAI(
-                                prompt
-                            )
-
-                        await reply(
-                            boxMenu(
-                                'AI',
-                                [result]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // BALANCE
-                    // =================================================
-
-                    if (cmd === 'balance') {
-
-                        const user =
-                            getUser(sender)
-
-                        await reply(
-                            boxMenu(
-                                'BALANCE',
-                                [
-                                    `Money: $${user.balance}`,
-                                    `Level: ${user.level}`,
-                                    `XP: ${user.xp}`
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // DAILY
-                    // =================================================
-
-                    if (cmd === 'daily') {
-
-                        const user =
-                            getUser(sender)
-
-                        if (
-                            Date.now() -
-                            user.lastDaily <
-                            86400000
-                        ) {
-
-                            return reply(
-                                boxMenu(
-                                    'DAILY',
-                                    [
-                                        'You already claimed your daily reward.'
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        user.balance += 500
-                        user.lastDaily =
-                            Date.now()
-
-                        addXP(
-                            sender,
-                            10
-                        )
-
-                        saveEco()
-
-                        await reply(
-                            boxMenu(
-                                'DAILY',
-                                [
-                                    'Claimed $500 + 10 XP'
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // AFK
-                    // =================================================
-
-                    if (cmd === 'afk') {
-
-                        BOT_SETTINGS.afk ??= {}
-
-                        BOT_SETTINGS.afk[
-                            sender
-                        ] = {
-                            reason:
-                                args.join(' ') ||
-                                'AFK',
-                            time:
-                                Date.now()
-                        }
-
-                        saveSettings()
-
-                        await reply(
-                            boxMenu(
-                                'AFK',
-                                [
-                                    `You are now AFK`,
-                                    `Reason: ${
-                                        BOT_SETTINGS.afk[
-                                            sender
-                                        ].reason
-                                    }`
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // SETTINGS
-                    // =================================================
-
-                    if (cmd === 'settings') {
-
-                        await reply(
-                            boxMenu(
-                                'BOT SETTINGS',
-                                [
-                                    `Prefix: ${PREFIX}`,
-                                    `Mode: ${BOT_SETTINGS.mode}`,
-                                    `DarkEye: ${
-                                        BOT_SETTINGS.darkeye
-                                            ? 'ON'
-                                            : 'OFF'
-                                    }`
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // OWNER-ONLY
-                    // =================================================
-
-                    if (
-                        [
-                            'eval',
-                            'exec',
-                            'restart'
-                        ].includes(cmd) &&
-                        !isOwner
-                    ) {
-
-                        return reply(
-                            boxMenu(
-                                'OWNER',
-                                [
-                                    'Only the bot owner can use this command.'
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-                    }
-
-                    // =================================================
-                    // EVAL
-                    // =================================================
-
-                    if (cmd === 'eval') {
-
-                        try {
-
-                            const result =
-                                await eval(
-                                    args.join(' ')
-                                )
-
-                            await reply(
-                                boxMenu(
-                                    'EVAL',
-                                    [
-                                        String(
-                                            result
-                                        )
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'EVAL ERROR',
-                                    [
-                                        e.message
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // RESTART
-                    // =================================================
-
-                    if (cmd === 'restart') {
-
-                        await reply(
-                            boxMenu(
-                                'RESTART',
-                                [
-                                    'Restarting...'
-                                ]
-                            ) +
-                            `\n${WM}`
-                        )
-
-                        setTimeout(
-                            () => process.exit(1),
-                            1000
-                        )
-
-                        return
-                    }
-
-                    // =================================================
-                    // QURAN
-                    // =================================================
-
-                    if (cmd === 'quran') {
-
-                        try {
-
-                            const res =
-                                await axios.get(
-                                    'https://api.alquran.cloud/v1/ayah/1:1/editions/quran-uthmani,en.asad',
-                                    {
-                                        timeout: 15000
-                                    }
-                                )
-
-                            const data =
-                                res.data?.data ||
-                                []
-
-                            const lines =
-                                data.map(
-                                    item =>
-                                        item.text
-                                )
-
-                            await reply(
-                                boxMenu(
-                                    'QURAN',
-                                    lines
-                                ) +
-                                `\n${WM}`
-                            )
-
-                        } catch (e) {
-
-                            await reply(
-                                boxMenu(
-                                    'QURAN ERROR',
-                                    [
-                                        e.message
-                                    ]
-                                ) +
-                                `\n${WM}`
-                            )
-                        }
-
-                        return
-                    }
-
-                    // =================================================
-                    // UNKNOWN COMMAND
-                    // =================================================
-
-                    await reply(
-                        boxMenu(
-                            'UNKNOWN COMMAND',
-                            [
-                                `Command: ${cmd}`,
-                                `Use ${PREFIX}menu to view commands.`
-                            ]
-                        ) +
-                        `\n${WM}`
+            async ({
+                messages,
+                type
+            }) => {
+
+                if (type !== 'notify') {
+                    return
+                }
+
+                for (const message of messages) {
+
+                    await processMessage(
+                        message
                     )
-
-                } catch (e) {
-
-                    console.error(
-                        'Message handler error:',
-                        e
-                    )
-
-                    try {
-
-                        await sock.sendMessage(
-                            m.key.remoteJid,
-                            {
-                                text:
-                                    boxMenu(
-                                        'ERROR',
-                                        [
-                                            e.message ||
-                                            'An unexpected error occurred.'
-                                        ]
-                                    ) +
-                                    `\n${WM}`
-                            },
-                            {
-                                quoted: m
-                            }
-                        )
-
-                    } catch (sendError) {
-                        console.error(
-                            'Error reply failed:',
-                            sendError
-                        )
-                    }
                 }
             }
         )
 
-    } catch (e) {
+
+        // ───────────────────────────────────────────────────────
+        // GROUP PARTICIPANTS
+        // ───────────────────────────────────────────────────────
+
+        sock.ev.on(
+            'group-participants.update',
+            handleGroupParticipantsUpdate
+        )
+
+
+    } catch (error) {
+
+        reconnecting = false
 
         console.error(
-            'Bot startup error:',
-            e
+            '[START BOT ERROR]',
+            error
+        )
+
+        console.log(
+            'Retrying in 10 seconds...'
         )
 
         setTimeout(
             startBot,
-            5000
+            10000
         )
     }
 }
 
-// ============================================================
-// START
-// ============================================================
 
-startBot()
+// ═══════════════════════════════════════════════════════════════
+// LOAD COMMANDS THEN START BOT
+// ═══════════════════════════════════════════════════════════════
+
+async function boot() {
+
+    try {
+
+        console.log('')
+        console.log(
+            '╭──────────────────────────────╮'
+        )
+        console.log(
+            `│       ${config.botName} BOOTING        │`
+        )
+        console.log(
+            '╰──────────────────────────────╯'
+        )
+        console.log('')
+
+
+        // Load every command from /commands
+        await loadCommands()
+
+
+        console.log('')
+
+
+        // Start WhatsApp
+        await startBot()
+
+    } catch (error) {
+
+        console.error(
+            '[BOOT ERROR]',
+            error
+        )
+
+        process.exit(1)
+    }
+}
+
+
+boot()
