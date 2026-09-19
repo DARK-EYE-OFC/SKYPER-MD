@@ -323,4 +323,4 @@ ${config.watermark}`
             )
         }
     }
-                  }
+  }
