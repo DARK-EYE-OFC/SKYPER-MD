@@ -17,7 +17,7 @@
     "qrcode": "^1.5.3",
     "qrcode-reader": "^1.0.4",
     "translate-google": "^1.5.0",
-    "wa-sticker-formatter": "^3.1.1",
+    "wa-sticker-formatter": "^4.4.4",
     "yt-search": "^2.11.1",
     "ytdl-core": "^4.11.5",
 	"form-data": "^4.0.0",
