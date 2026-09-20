@@ -324,3 +324,5 @@ ${config.watermark}`
         }
     }
   }
+
+export default updateCommand
