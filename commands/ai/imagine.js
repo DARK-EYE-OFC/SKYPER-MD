@@ -1,4 +1,4 @@
-import axios from 'axios'
+import OpenAI from 'openai'
 
 const imagineCommand = {
 
@@ -22,13 +22,14 @@ const imagineCommand = {
         from
     }) {
 
-        // ───────────────────────────────────────────────────────
-        // CHECK PROMPT
-        // ───────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────
+        // GET PROMPT
+        // ─────────────────────────────────────────────
 
         const prompt =
             text?.trim() ||
             args?.join(' ')?.trim()
+
 
         if (!prompt) {
 
@@ -45,38 +46,45 @@ const imagineCommand = {
         }
 
 
-        // ───────────────────────────────────────────────────────
-        // API CONFIG
-        // ───────────────────────────────────────────────────────
-
-        const apiUrl =
-            process.env.IMAGE_API_URL
+        // ─────────────────────────────────────────────
+        // CHECK OPENAI API KEY
+        // ─────────────────────────────────────────────
 
         const apiKey =
-            process.env.IMAGE_API_KEY ||
-            config?.apiKeys?.image
+            process.env.OPENAI_API_KEY
 
-
-        if (!apiUrl) {
+        if (!apiKey) {
 
             return reply(
 `╭───❒ *AI IMAGE GENERATOR* ❒───╮
-│ ⚠️ Image generation is not
-│ configured yet.
 │
-│ Add IMAGE_API_URL to your
-│ .env file first.
+│ ❌ OpenAI API is not configured.
+│
+│ Add OPENAI_API_KEY to your
+│ .env file.
+│
 ╰──────────────────────────────❒`
             )
         }
 
 
-        // ───────────────────────────────────────────────────────
-        // GENERATING
-        // ───────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────
+        // START OPENAI CLIENT
+        // ─────────────────────────────────────────────
+
+        const openai =
+            new OpenAI({
+                apiKey
+            })
+
+
+        // ─────────────────────────────────────────────
+        // GENERATING MESSAGE
+        // ─────────────────────────────────────────────
 
         await reply(
 `╭───❒ *IMAGINE AI* ❒───╮
+│
 │ 🎨 Generating image...
 │
 │ 📝 Prompt:
@@ -89,84 +97,69 @@ const imagineCommand = {
 
         try {
 
-            // ───────────────────────────────────────────────
-            // API REQUEST
-            // ───────────────────────────────────────────────
+            // ─────────────────────────────────────────
+            // GENERATE IMAGE
+            // ─────────────────────────────────────────
 
-            const response =
-                await axios.post(
-                    apiUrl,
-                    {
-                        prompt
-                    },
-                    {
-                        headers: apiKey
-                            ? {
-                                Authorization:
-                                    `Bearer ${apiKey}`,
-
-                                'Content-Type':
-                                    'application/json'
-                            }
-                            : {
-                                'Content-Type':
-                                    'application/json'
-                            },
-
-                        timeout: 120000
-                    }
-                )
+            const result =
+                await openai.images.generate({
+                    model: 'gpt-image-1',
+                    prompt,
+                    size: '1024x1024'
+                })
 
 
-            const data =
-                response.data
+            // ─────────────────────────────────────────
+            // GET BASE64 IMAGE
+            // ─────────────────────────────────────────
+
+            const imageData =
+                result?.data?.[0]?.b64_json
 
 
-            // ───────────────────────────────────────────────
-            // FIND IMAGE URL
-            // ───────────────────────────────────────────────
-
-            const imageUrl =
-                data?.image ||
-                data?.imageUrl ||
-                data?.url ||
-                data?.output ||
-                data?.result?.image ||
-                data?.result?.url
-
-
-            if (!imageUrl) {
+            if (!imageData) {
 
                 console.error(
-                    '[IMAGINE API RESPONSE]',
-                    data
+                    '[IMAGINE RESPONSE]',
+                    result
                 )
 
                 return reply(
 `❌ *Image generation failed.*
 
-The API did not return an image URL.`
+No image was returned by OpenAI.`
                 )
             }
 
 
-            // ───────────────────────────────────────────────
-            // SEND IMAGE
-            // ───────────────────────────────────────────────
+            // ─────────────────────────────────────────
+            // CONVERT BASE64 TO BUFFER
+            // ─────────────────────────────────────────
+
+            const imageBuffer =
+                Buffer.from(
+                    imageData,
+                    'base64'
+                )
+
+
+            // ─────────────────────────────────────────
+            // SEND IMAGE TO WHATSAPP
+            // ─────────────────────────────────────────
 
             await sock.sendMessage(
                 from,
                 {
-                    image: {
-                        url: imageUrl
-                    },
+                    image: imageBuffer,
 
                     caption:
 `╭───❒ *AI IMAGE* ❒───╮
-│ 🎨 Prompt:
+│
+│ 🎨 *Prompt:*
 │ ${prompt}
 │
-│ 🤖 ${config.botName}
+│ 🤖 *Bot:* ${config.botName}
+│
 ╰────────────────────❒
 
 ${config.watermark}`
@@ -181,21 +174,31 @@ ${config.watermark}`
 
             console.error(
                 '[IMAGINE ERROR]',
-                error.response?.data ||
-                error.message
+                error
             )
+
+
+            const errorMessage =
+                error?.error?.message ||
+                error?.response?.data?.error?.message ||
+                error?.message ||
+                'Unknown OpenAI error'
+
 
             await reply(
 `╭───❒ *IMAGINE ERROR* ❒───╮
-│ ❌ Failed to generate image.
 │
-│ Please try again later.
-╰───────────────────────────❒
+│ ❌ Image generation failed.
+│
+│ ${errorMessage}
+│
+╰──────────────────────────❒
 
 ${config.watermark}`
             )
         }
     }
 }
+
 
 export default imagineCommand
