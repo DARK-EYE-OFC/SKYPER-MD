@@ -90,7 +90,9 @@ createJSONFile(
     {
         mode: 'public',
         afk: {},
-        darkeye: false
+        darkeye: false,
+        aishield: {},
+        chatbot: {}
     }
 )
 
@@ -102,18 +104,27 @@ createJSONFile(
 const config = {
 
     botName:
+        process.env.BOT_NAME ||
         'SKYPER-MD',
 
     version:
+        process.env.VERSION ||
         '2.0.5',
 
     ownerName:
+        process.env.OWNER_NAME ||
         'DARK-EYE OFC DEV',
 
     ownerNumber:
+        process.env.OWNER_NUMBER ||
         '263783546271',
 
+    sudoNumber:
+        process.env.SUDO_NUMBER ||
+        '',
+
     prefix:
+        process.env.PREFIX ||
         '.',
 
     mode:
@@ -144,20 +155,61 @@ const config = {
             process.env.UNSPLASH_API_KEY || '',
 
         news:
-            process.env.NEWS_API_KEY || ''
+            process.env.NEWS_API_KEY || '',
+
+        gemini:
+            process.env.GEMINI_API_KEY || '',
+
+        openai:
+            process.env.OPENAI_API_KEY || '',
+
+        googleSafeBrowsing:
+            process.env.GOOGLE_SAFE_BROWSING_API_KEY || '',
+
+        urlhaus:
+            process.env.URLHAUS_AUTH_KEY || ''
     }
 }
 
 
 // ═══════════════════════════════════════════════════════════════
-// OWNER
+// OWNER NUMBERS
 // ═══════════════════════════════════════════════════════════════
 
+const ownerNumbers =
+    String(config.ownerNumber)
+        .split(',')
+        .map(number =>
+            number
+                .replace(/\D/g, '')
+                .trim()
+        )
+        .filter(Boolean)
+
+
 const OWNER_NUM =
-    config.ownerNumber
+    ownerNumbers[0] || ''
+
 
 const OWNER_JID =
-    `${OWNER_NUM}@s.whatsapp.net`
+    OWNER_NUM
+        ? `${OWNER_NUM}@s.whatsapp.net`
+        : ''
+
+
+// ═══════════════════════════════════════════════════════════════
+// SUDO NUMBERS
+// ═══════════════════════════════════════════════════════════════
+
+const sudoNumbers =
+    String(config.sudoNumber)
+        .split(',')
+        .map(number =>
+            number
+                .replace(/\D/g, '')
+                .trim()
+        )
+        .filter(Boolean)
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -169,6 +221,7 @@ const app =
 
 const PORT =
     process.env.PORT || 10000
+
 
 app.use(
     express.json()
@@ -236,11 +289,18 @@ const BOT_SETTINGS =
         {
             mode: 'public',
             afk: {},
-            darkeye: false
+            darkeye: false,
+            aishield: {},
+            chatbot: {}
         }
     )
 
+
 BOT_SETTINGS.afk ??= {}
+
+BOT_SETTINGS.aishield ??= {}
+
+BOT_SETTINGS.chatbot ??= {}
 
 BOT_SETTINGS.mode ??=
     config.mode
@@ -319,7 +379,10 @@ function addXP(
     const required =
         user.level * 100
 
-    if (user.xp >= required) {
+    if (
+        user.xp >=
+        required
+    ) {
 
         user.xp -= required
 
@@ -429,6 +492,10 @@ function getText(message) {
 
         msg.documentMessage?.caption ||
 
+        msg.buttonsResponseMessage?.selectedButtonId ||
+
+        msg.listResponseMessage?.singleSelectReply?.selectedRowId ||
+
         ''
     )
 }
@@ -453,12 +520,53 @@ function isGroupJid(jid) {
 }
 
 
+function normalizeNumber(value) {
+
+    return String(value || '')
+        .split('@')[0]
+        .split(':')[0]
+        .replace(/\D/g, '')
+}
+
+
+function isOwnerNumber(jid) {
+
+    const number =
+        normalizeNumber(jid)
+
+    return ownerNumbers.includes(
+        number
+    )
+}
+
+
+function isSudoNumber(jid) {
+
+    const number =
+        normalizeNumber(jid)
+
+    return sudoNumbers.includes(
+        number
+    )
+}
+
+
 function getMentionedJids(m) {
 
     return (
 
         m.message
             ?.extendedTextMessage
+            ?.contextInfo
+            ?.mentionedJid ||
+
+        m.message
+            ?.imageMessage
+            ?.contextInfo
+            ?.mentionedJid ||
+
+        m.message
+            ?.videoMessage
             ?.contextInfo
             ?.mentionedJid ||
 
@@ -478,7 +586,9 @@ async function isAdmin(
 
     try {
 
-        if (!isGroupJid(groupJid)) {
+        if (
+            !isGroupJid(groupJid)
+        ) {
             return false
         }
 
@@ -494,7 +604,9 @@ async function isAdmin(
         const participant =
             metadata.participants.find(
                 p =>
-                    p.id === jid
+                    p.id === jid ||
+                    normalizeNumber(p.id) ===
+                    normalizeNumber(jid)
             )
 
         return Boolean(
@@ -521,16 +633,24 @@ async function isBotAdmin(
         }
 
         const botNumber =
-            sock.user.id
-                .split(':')[0]
-                .split('@')[0]
+            normalizeNumber(
+                sock.user.id
+            )
 
-        const botJid =
-            `${botNumber}@s.whatsapp.net`
+        const metadata =
+            await sock.groupMetadata(
+                groupJid
+            )
 
-        return await isAdmin(
-            botJid,
-            groupJid
+        const participant =
+            metadata.participants.find(
+                p =>
+                    normalizeNumber(p.id) ===
+                    botNumber
+            )
+
+        return Boolean(
+            participant?.admin
         )
 
     } catch {
@@ -551,7 +671,8 @@ async function reply(
 
     if (
         !sock ||
-        !m
+        !m ||
+        !m.key?.remoteJid
     ) {
         return
     }
@@ -559,7 +680,7 @@ async function reply(
     return sock.sendMessage(
         m.key.remoteJid,
         {
-            text
+            text: String(text)
         },
         {
             quoted: m
@@ -649,73 +770,34 @@ ${config.botName} Pair
 <style>
 
 body {
-
-    font-family:
-        Arial,
-        sans-serif;
-
-    background:
-        #111;
-
-    color:
-        white;
-
-    text-align:
-        center;
-
-    padding:
-        50px 20px;
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: white;
+    text-align: center;
+    padding: 50px 20px;
 }
 
 input {
-
-    padding:
-        14px;
-
-    width:
-        280px;
-
-    max-width:
-        90%;
-
-    border-radius:
-        8px;
-
-    border:
-        none;
-
-    margin-bottom:
-        15px;
+    padding: 14px;
+    width: 280px;
+    max-width: 90%;
+    border-radius: 8px;
+    border: none;
+    margin-bottom: 15px;
 }
 
 button {
-
-    padding:
-        14px 25px;
-
-    border:
-        none;
-
-    border-radius:
-        8px;
-
-    cursor:
-        pointer;
+    padding: 14px 25px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
 }
 
 #result {
-
-    margin-top:
-        25px;
-
-    font-size:
-        25px;
-
-    font-weight:
-        bold;
-
-    word-break:
-        break-word;
+    margin-top: 25px;
+    font-size: 25px;
+    font-weight: bold;
+    word-break: break-word;
 }
 
 </style>
@@ -802,11 +884,10 @@ async function pair() {
                 )
         }
 
-    } catch (error) {
+    } catch {
 
         result.innerText =
             '❌ Connection failed'
-
     }
 }
 
@@ -845,30 +926,22 @@ app.get(
                 return res
                     .status(400)
                     .json({
-
-                        success:
-                            false,
-
+                        success: false,
                         error:
                             'WhatsApp number is required'
                     })
             }
-
 
             if (!sock) {
 
                 return res
                     .status(503)
                     .json({
-
-                        success:
-                            false,
-
+                        success: false,
                         error:
                             'WhatsApp socket is not ready yet. Please wait a few seconds.'
                     })
             }
-
 
             if (
                 sock.authState
@@ -879,15 +952,11 @@ app.get(
                 return res
                     .status(400)
                     .json({
-
-                        success:
-                            false,
-
+                        success: false,
                         error:
                             'This bot is already registered. Delete the session folder before pairing a new number.'
                     })
             }
-
 
             if (
                 pairingInProgress
@@ -896,19 +965,14 @@ app.get(
                 return res
                     .status(429)
                     .json({
-
-                        success:
-                            false,
-
+                        success: false,
                         error:
                             'A pairing request is already in progress. Please wait.'
                     })
             }
 
-
             pairingInProgress =
                 true
-
 
             console.log('')
 
@@ -936,30 +1000,6 @@ app.get(
                 '╰──────────────────────────────╯'
             )
 
-
-            /*
-             * Baileys pairing works best after
-             * the socket has started connecting.
-             *
-             * If the socket is already open,
-             * we can request immediately.
-             */
-
-            if (
-                sock.user
-            ) {
-
-                console.log(
-                    '⚠️ Socket already has a user.'
-                )
-            }
-
-
-            /*
-             * Give the socket a short amount of time
-             * to initialize before requesting code.
-             */
-
             await new Promise(
                 resolve =>
                     setTimeout(
@@ -968,7 +1008,6 @@ app.get(
                     )
             )
 
-
             if (!sock) {
 
                 throw new Error(
@@ -976,17 +1015,14 @@ app.get(
                 )
             }
 
-
             console.log(
                 '🔗 Requesting WhatsApp pairing code...'
             )
-
 
             const code =
                 await sock.requestPairingCode(
                     number
                 )
-
 
             const formatted =
                 code
@@ -994,59 +1030,30 @@ app.get(
                     ?.join('-') ||
                 code
 
-
             console.log(
                 `✅ Pairing code generated: ${formatted}`
             )
 
-
             return res.json({
-
-                success:
-                    true,
-
-                code:
-                    formatted
+                success: true,
+                code: formatted
             })
-
 
         } catch (error) {
 
-            console.error('')
-
             console.error(
-                '╭──────────────────────────────╮'
+                '[PAIRING ERROR]',
+                error
             )
-
-            console.error(
-                '│       PAIRING ERROR          │'
-            )
-
-            console.error(
-                '├──────────────────────────────┤'
-            )
-
-            console.error(
-                `│ ${error.message}`
-            )
-
-            console.error(
-                '╰──────────────────────────────╯'
-            )
-
 
             return res
                 .status(500)
                 .json({
-
-                    success:
-                        false,
-
+                    success: false,
                     error:
                         error.message ||
                         'Unable to generate pairing code'
                 })
-
 
         } finally {
 
@@ -1082,7 +1089,6 @@ app.get(
             users = {}
         }
 
-
         res.json({
 
             users:
@@ -1112,7 +1118,14 @@ app.get(
                 config.botName,
 
             mode:
-                BOT_SETTINGS.mode
+                BOT_SETTINGS.mode,
+
+            connectedNumber:
+                sock?.user?.id
+                    ? normalizeNumber(
+                        sock.user.id
+                    )
+                    : null
         })
     }
 )
@@ -1122,11 +1135,9 @@ app.get(
 // COMMAND COUNTER
 // ═══════════════════════════════════════════════════════════════
 
-app.get(
+app.post(
     '/api/command',
     (req, res) => {
-
-        totalCommands++
 
         res.json({
 
@@ -1154,25 +1165,21 @@ app.post(
                 name
             } = req.body
 
-
             if (!jid) {
 
                 return res
                     .status(400)
                     .json({
-
                         error:
                             'jid required'
                     })
             }
-
 
             const economyData =
                 readJSON(
                     ECONOMY_FILE,
                     {}
                 )
-
 
             if (
                 !economyData[jid]
@@ -1194,27 +1201,21 @@ app.post(
                         1
                 }
 
-
                 writeJSON(
                     ECONOMY_FILE,
                     economyData
                 )
             }
 
-
             res.json({
-
-                success:
-                    true
+                success: true
             })
-
 
         } catch (error) {
 
             res
                 .status(500)
                 .json({
-
                     error:
                         error.message
                 })
@@ -1262,6 +1263,14 @@ app.listen(
         )
 
         console.log('')
+
+        console.log(
+            `👑 Owner numbers: ${ownerNumbers.length}`
+        )
+
+        console.log(
+            `🔐 Sudo numbers: ${sudoNumbers.length}`
+        )
     }
 )
 
@@ -1282,20 +1291,17 @@ async function handleGroupParticipantsUpdate(
             action
         } = update
 
-
         if (
             !isGroupJid(id)
         ) {
             return
         }
 
-
         if (
             !groupSettings[id]?.welcome
         ) {
             return
         }
-
 
         for (
             const participant
@@ -1305,7 +1311,6 @@ async function handleGroupParticipantsUpdate(
             const number =
                 participant
                     .split('@')[0]
-
 
             if (
                 action === 'add'
@@ -1329,7 +1334,6 @@ ${config.watermark}`,
                     }
                 )
             }
-
 
             if (
                 action === 'remove'
@@ -1355,7 +1359,6 @@ ${config.watermark}`,
             }
         }
 
-
     } catch (error) {
 
         console.error(
@@ -1379,7 +1382,6 @@ async function handleAFK(
     const afk =
         BOT_SETTINGS.afk || {}
 
-
     if (
         afk[sender]
     ) {
@@ -1387,11 +1389,9 @@ async function handleAFK(
         const old =
             afk[sender]
 
-
         delete afk[sender]
 
         saveSettings()
-
 
         await reply(
 `╭───❒ *AFK* ❒───╮
@@ -1408,10 +1408,8 @@ async function handleAFK(
         )
     }
 
-
     const mentions =
         getMentionedJids(m)
-
 
     for (
         const jid
@@ -1424,10 +1422,8 @@ async function handleAFK(
             continue
         }
 
-
         const data =
             afk[jid]
-
 
         const duration =
             formatUptime(
@@ -1437,7 +1433,6 @@ async function handleAFK(
                 ) / 1000
             )
 
-
         await reply(
 `╭───❒ *AFK USER* ❒───╮
 │ 👤 @${jid.split('@')[0]}
@@ -1446,7 +1441,6 @@ async function handleAFK(
 ╰────────────────────❒`,
             m
         )
-
 
         break
     }
@@ -1470,13 +1464,11 @@ async function handleAntiLink(
         return false
     }
 
-
     if (
         !groupSettings[from]?.antilink
     ) {
         return false
     }
-
 
     if (
         !body.includes(
@@ -1486,24 +1478,20 @@ async function handleAntiLink(
         return false
     }
 
-
     const admin =
         await isAdmin(
             sender,
             from
         )
 
-
     if (admin) {
         return false
     }
-
 
     const botAdmin =
         await isBotAdmin(
             from
         )
-
 
     if (!botAdmin) {
 
@@ -1515,7 +1503,6 @@ async function handleAntiLink(
         return true
     }
 
-
     try {
 
         await sock.sendMessage(
@@ -1526,7 +1513,6 @@ async function handleAntiLink(
             }
         )
 
-
         await reply(
 `╭───❒ *ANTI-LINK* ❒───╮
 │ 🚫 WhatsApp group links
@@ -1535,7 +1521,6 @@ async function handleAntiLink(
             m
         )
 
-
     } catch (error) {
 
         console.error(
@@ -1543,7 +1528,6 @@ async function handleAntiLink(
             error.message
         )
     }
-
 
     return true
 }
@@ -1565,42 +1549,40 @@ async function processMessage(
             return
         }
 
-
         const from =
             m.key.remoteJid
-
 
         if (!from) {
             return
         }
 
-
+        // Never respond to the bot's own messages.
         if (
             m.key.fromMe
         ) {
             return
         }
 
-
         const sender =
             getSender(m)
-
 
         const body =
             getText(m).trim()
 
+        // DEBUG
+        console.log(
+            `[MESSAGE] from=${from} sender=${sender} body=${body}`
+        )
 
         if (!body) {
             return
         }
-
 
         await handleAFK(
             m,
             from,
             sender
         )
-
 
         const blocked =
             await handleAntiLink(
@@ -1610,15 +1592,12 @@ async function processMessage(
                 body
             )
 
-
         if (blocked) {
             return
         }
 
-
         const prefix =
             config.prefix
-
 
         if (
             !body.startsWith(
@@ -1628,7 +1607,6 @@ async function processMessage(
             return
         }
 
-
         const withoutPrefix =
             body
                 .slice(
@@ -1636,46 +1614,37 @@ async function processMessage(
                 )
                 .trim()
 
-
         if (!withoutPrefix) {
             return
         }
-
 
         const parts =
             withoutPrefix.split(
                 /\s+/
             )
 
-
         const cmd =
             parts
                 .shift()
                 .toLowerCase()
 
-
         const args =
             parts
-
 
         const text =
             args.join(' ')
 
-
         const isGroup =
             isGroupJid(from)
 
-
         const isOwner =
-            sender === OWNER_JID ||
-            sender
-                .split(':')[0] ===
-                OWNER_NUM
+            isOwnerNumber(sender)
 
+        const isSudo =
+            isSudoNumber(sender)
 
         let senderIsAdmin =
             false
-
 
         if (
             isGroup
@@ -1688,11 +1657,9 @@ async function processMessage(
                 )
         }
 
-
         const pushName =
             m.pushName ||
             'User'
-
 
         const user =
             getUser(
@@ -1700,6 +1667,9 @@ async function processMessage(
                 pushName
             )
 
+        console.log(
+            `[COMMAND] cmd=${cmd} sender=${sender} owner=${isOwner} sudo=${isSudo} group=${isGroup}`
+        )
 
         const context = {
 
@@ -1727,7 +1697,13 @@ async function processMessage(
 
             OWNER_JID,
 
+            ownerNumbers,
+
+            sudoNumbers,
+
             isOwner,
+
+            isSudo,
 
             isGroup,
 
@@ -1768,6 +1744,8 @@ async function processMessage(
 
             formatUptime,
 
+            normalizeNumber,
+
             ROOT,
 
             DATABASE_DIR,
@@ -1781,12 +1759,10 @@ async function processMessage(
             }
         }
 
-
         const executed =
             await handleCommand(
                 context
             )
-
 
         if (
             executed
@@ -1794,18 +1770,34 @@ async function processMessage(
 
             totalCommands++
 
+            console.log(
+                `[COMMAND SUCCESS] ${cmd}`
+            )
 
             try {
 
                 await axios.post(
-                    `${config.dashboardUrl}/api/command`
+                    `${config.dashboardUrl}/api/command`,
+                    {
+                        command:
+                            cmd
+                    },
+                    {
+                        timeout:
+                            5000
+                    }
                 )
 
             } catch {
                 // Dashboard is optional.
             }
-        }
 
+        } else {
+
+            console.log(
+                `[COMMAND NOT FOUND] ${cmd}`
+            )
+        }
 
     } catch (error) {
 
@@ -1813,7 +1805,6 @@ async function processMessage(
             '[MESSAGE ERROR]',
             error
         )
-
 
         try {
 
@@ -1841,7 +1832,6 @@ async function startBot() {
         return
     }
 
-
     try {
 
         const {
@@ -1852,17 +1842,14 @@ async function startBot() {
                 SESSION_DIR
             )
 
-
         const {
             version
         } =
             await fetchLatestBaileysVersion()
 
-
         console.log(
             `Using WhatsApp version ${version.join('.')}`
         )
-
 
         sock =
             makeWASocket({
@@ -1900,6 +1887,10 @@ async function startBot() {
         )
 
 
+        // ═══════════════════════════════════════════════════════
+        // CONNECTION UPDATE
+        // ═══════════════════════════════════════════════════════
+
         sock.ev.on(
             'connection.update',
             async update => {
@@ -1908,7 +1899,6 @@ async function startBot() {
                     connection,
                     lastDisconnect
                 } = update
-
 
                 if (
                     connection ===
@@ -1920,14 +1910,13 @@ async function startBot() {
                     )
                 }
 
-
                 if (
-                    connection === 'open'
+                    connection ===
+                    'open'
                 ) {
 
                     reconnecting =
                         false
-
 
                     console.log('')
 
@@ -1958,11 +1947,20 @@ async function startBot() {
                     )
 
                     console.log(
+                        `│ Number: ${normalizeNumber(
+                            sock.user?.id
+                        )}`
+                    )
+
+                    console.log(
                         '╰──────────────────────────────╯'
                     )
 
                     console.log('')
 
+                    console.log(
+                        '📥 Message listener: ACTIVE'
+                    )
 
                     try {
 
@@ -1975,17 +1973,18 @@ async function startBot() {
                                 {
 
                                     jid:
-                                        sock.user.id
-                                            .split(':')[0]
-                                            .replace(
-                                                '@s.whatsapp.net',
-                                                ''
-                                            ) +
+                                        normalizeNumber(
+                                            sock.user.id
+                                        ) +
                                         '@s.whatsapp.net',
 
                                     name:
                                         sock.user.name ||
                                         config.botName
+                                },
+                                {
+                                    timeout:
+                                        5000
                                 }
                             )
                         }
@@ -1995,9 +1994,9 @@ async function startBot() {
                     }
                 }
 
-
                 if (
-                    connection === 'close'
+                    connection ===
+                    'close'
                 ) {
 
                     const statusCode =
@@ -2006,16 +2005,13 @@ async function startBot() {
                             ?.output
                             ?.statusCode
 
-
                     const shouldReconnect =
                         statusCode !==
                         DisconnectReason.loggedOut
 
-
                     console.log(
                         `❌ WhatsApp disconnected. Code: ${statusCode}`
                     )
-
 
                     if (
                         shouldReconnect
@@ -2024,11 +2020,9 @@ async function startBot() {
                         reconnecting =
                             true
 
-
                         console.log(
                             '🔄 Reconnecting in 5 seconds...'
                         )
-
 
                         setTimeout(
                             () => {
@@ -2053,6 +2047,10 @@ async function startBot() {
         )
 
 
+        // ═══════════════════════════════════════════════════════
+        // INCOMING MESSAGES
+        // ═══════════════════════════════════════════════════════
+
         sock.ev.on(
             'messages.upsert',
             async ({
@@ -2060,48 +2058,61 @@ async function startBot() {
                 type
             }) => {
 
+                console.log(
+                    `[WA EVENT] messages.upsert type=${type} count=${messages?.length || 0}`
+                )
+
                 if (
                     type !== 'notify'
                 ) {
                     return
                 }
 
-
                 for (
                     const message
                     of messages
                 ) {
 
-                    await processMessage(
-                        message
-                    )
+                    try {
+
+                        await processMessage(
+                            message
+                        )
+
+                    } catch (error) {
+
+                        console.error(
+                            '[MESSAGE EVENT ERROR]',
+                            error
+                        )
+                    }
                 }
             }
         )
 
+
+        // ═══════════════════════════════════════════════════════
+        // GROUP PARTICIPANTS
+        // ═══════════════════════════════════════════════════════
 
         sock.ev.on(
             'group-participants.update',
             handleGroupParticipantsUpdate
         )
 
-
     } catch (error) {
 
         reconnecting =
             false
-
 
         console.error(
             '[START BOT ERROR]',
             error
         )
 
-
         console.log(
             'Retrying in 10 seconds...'
         )
-
 
         setTimeout(
             startBot,
@@ -2135,15 +2146,25 @@ async function boot() {
 
         console.log('')
 
+        console.log(
+            `👑 Owner numbers: ${ownerNumbers.join(', ') || 'none'}`
+        )
 
-        await loadCommands()
+        console.log(
+            `🔐 Sudo numbers: ${sudoNumbers.join(', ') || 'none'}`
+        )
 
+        console.log(
+            `⚡ Prefix: ${config.prefix}`
+        )
 
         console.log('')
 
+        await loadCommands()
+
+        console.log('')
 
         await startBot()
-
 
     } catch (error) {
 
