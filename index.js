@@ -1556,12 +1556,8 @@ async function processMessage(
             return
         }
 
-        // Never respond to the bot's own messages.
-        if (
-            m.key.fromMe
-        ) {
-            return
-        }
+        // Allow the connected bot account to use commands
+// if (m.key.fromMe) return
 
         const sender =
             getSender(m)
