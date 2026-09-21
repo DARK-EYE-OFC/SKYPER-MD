@@ -1,28 +1,28 @@
-	{
+{
   "name": "skyper-md",
   "version": "2.0.0",
   "main": "index.js",
   "type": "module",
-  "scripts": { 
+  "scripts": {
     "start": "node index.js",
     "build": "npm install --legacy-peer-deps"
   },
   "dependencies": {
+    "@google/genai": "^1.0.0",
     "@whiskeysockets/baileys": "^6.7.5",
     "axios": "^1.6.8",
+    "dotenv": "^17.2.2",
     "express": "^4.18.2",
-    "jimp": "^0.22.12",
+    "form-data": "^4.0.0",
+    "jimp": "^1.6.1",
     "moment": "^2.30.1",
+    "openai": "^5.0.0",
     "pino": "^8.19.0",
     "qrcode": "^1.5.3",
     "qrcode-reader": "^1.0.4",
     "translate-google": "^1.5.0",
     "wa-sticker-formatter": "^3.1.1",
     "yt-search": "^2.11.1",
-    "ytdl-core": "^4.11.5",
-	"dotenv": "^17.2.2",
-	"form-data": "^4.0.0",
-    "@google/genai": "^1.0.0",
-    "openai": "^5.0.0"
+    "ytdl-core": "^4.11.5"
   }
 }

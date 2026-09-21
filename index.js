@@ -57,24 +57,42 @@ for (const dir of [
 // DATABASE FILES
 // ═══════════════════════════════════════════════════════════════
 
-const ECONOMY_FILE = path.join(DATABASE_DIR, 'economy.json')
-const SETTINGS_FILE = path.join(DATABASE_DIR, 'settings.json')
+const ECONOMY_FILE =
+    path.join(DATABASE_DIR, 'economy.json')
+
+const SETTINGS_FILE =
+    path.join(DATABASE_DIR, 'settings.json')
+
 
 function createJSONFile(file, defaultData) {
+
     if (!fs.existsSync(file)) {
+
         fs.writeFileSync(
             file,
-            JSON.stringify(defaultData, null, 2)
+            JSON.stringify(
+                defaultData,
+                null,
+                2
+            )
         )
     }
 }
 
-createJSONFile(ECONOMY_FILE, {})
-createJSONFile(SETTINGS_FILE, {
-    mode: 'public',
-    afk: {},
-    darkeye: false
-})
+
+createJSONFile(
+    ECONOMY_FILE,
+    {}
+)
+
+createJSONFile(
+    SETTINGS_FILE,
+    {
+        mode: 'public',
+        afk: {},
+        darkeye: false
+    }
+)
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -82,25 +100,37 @@ createJSONFile(SETTINGS_FILE, {
 // ═══════════════════════════════════════════════════════════════
 
 const config = {
-    botName: 'SKYPER-MD',
-    version: '2.0.5',
 
-    ownerName: 'DARK-EYE OFC DEV',
-    ownerNumber: '263783546271',
+    botName:
+        'SKYPER-MD',
 
-    prefix: '.',
-    mode: 'public',
+    version:
+        '2.0.5',
+
+    ownerName:
+        'DARK-EYE OFC DEV',
+
+    ownerNumber:
+        '263783546271',
+
+    prefix:
+        '.',
+
+    mode:
+        'public',
 
     watermark:
         '> *♤powered by DARK-EYE OFC DEV*',
 
-    sessionPath: './session',
+    sessionPath:
+        './session',
 
     dashboardUrl:
         process.env.DASHBOARD_URL ||
         'https://skyper-md.onrender.com',
 
     apiKeys: {
+
         openweather:
             process.env.OPENWEATHER_API_KEY || '',
 
@@ -123,7 +153,8 @@ const config = {
 // OWNER
 // ═══════════════════════════════════════════════════════════════
 
-const OWNER_NUM = config.ownerNumber
+const OWNER_NUM =
+    config.ownerNumber
 
 const OWNER_JID =
     `${OWNER_NUM}@s.whatsapp.net`
@@ -133,374 +164,35 @@ const OWNER_JID =
 // EXPRESS SERVER
 // ═══════════════════════════════════════════════════════════════
 
-const app = express()
+const app =
+    express()
 
 const PORT =
     process.env.PORT || 10000
 
-app.use(express.json())
-app.use(express.urlencoded({
-    extended: true
-}))
+app.use(
+    express.json()
+)
+
+app.use(
+    express.urlencoded({
+        extended: true
+    })
+)
 
 app.use(
     express.static(PUBLIC_DIR)
 )
 
 
-// ───────────────────────────────────────────────────────────────
-// DASHBOARD
-// ───────────────────────────────────────────────────────────────
-
-app.get('/', (req, res) => {
-
-    const dashboard =
-        path.join(
-            PUBLIC_DIR,
-            'dashboard.html'
-        )
-
-    if (fs.existsSync(dashboard)) {
-        return res.sendFile(dashboard)
-    }
-
-    res.send(`
-        <html>
-            <head>
-                <title>${config.botName}</title>
-            </head>
-
-            <body>
-                <h1>${config.botName}</h1>
-                <p>Bot is running.</p>
-                <p>Version: ${config.version}</p>
-            </body>
-        </html>
-    `)
-})
-
-
-// ───────────────────────────────────────────────────────────────
-// PAIRING PAGE
-// ───────────────────────────────────────────────────────────────
-
-app.get('/pair', (req, res) => {
-
-    res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>${config.botName} Pair</title>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #111;
-            color: white;
-            text-align: center;
-            padding: 50px 20px;
-        }
-
-        input {
-            padding: 14px;
-            width: 280px;
-            max-width: 90%;
-            border-radius: 8px;
-            border: none;
-            margin-bottom: 15px;
-        }
-
-        button {
-            padding: 14px 25px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
-        #result {
-            margin-top: 25px;
-            font-size: 25px;
-            font-weight: bold;
-        }
-    </style>
-</head>
-
-<body>
-
-    <h1>${config.botName}</h1>
-
-    <p>
-        Enter your WhatsApp number with country code.
-    </p>
-
-    <input
-        id="number"
-        placeholder="263783546271"
-    />
-
-    <br>
-
-    <button onclick="pair()">
-        GET PAIR CODE
-    </button>
-
-    <div id="result"></div>
-
-<script>
-
-async function pair() {
-
-    const number =
-        document.getElementById('number').value.trim()
-
-    if (!number) {
-        alert('Enter your WhatsApp number')
-        return
-    }
-
-    document.getElementById('result').innerText =
-        'Generating...'
-
-    try {
-
-        const response =
-            await fetch(
-                '/pair?number=' +
-                encodeURIComponent(number)
-            )
-
-        const data =
-            await response.json()
-
-        if (data.code) {
-
-            document.getElementById('result').innerText =
-                data.code
-
-        } else {
-
-            document.getElementById('result').innerText =
-                data.error || 'Failed'
-
-        }
-
-    } catch (error) {
-
-        document.getElementById('result').innerText =
-            'Something went wrong'
-
-    }
-}
-
-</script>
-
-</body>
-</html>
-`)
-})
-
-
-// ───────────────────────────────────────────────────────────────
-// PAIRING API
-// ───────────────────────────────────────────────────────────────
-
-app.get('/pair', async (req, res) => {
-
-    try {
-
-        const number =
-            String(req.query.number || '')
-                .replace(/\D/g, '')
-
-        if (!number) {
-            return res.status(400).json({
-                error: 'WhatsApp number is required'
-            })
-        }
-
-        if (!sock) {
-            return res.status(503).json({
-                error: 'Bot is not ready yet'
-            })
-        }
-
-        if (sock.authState?.creds?.registered) {
-
-            return res.json({
-                error:
-                    'This bot is already registered. Delete the session first if you need a new pairing.'
-            })
-        }
-
-        const code =
-            await sock.requestPairingCode(number)
-
-        const formatted =
-            code?.match(/.{1,4}/g)?.join('-') ||
-            code
-
-        res.json({
-            success: true,
-            code: formatted
-        })
-
-    } catch (error) {
-
-        console.error(
-            '[PAIR ERROR]',
-            error.message
-        )
-
-        res.status(500).json({
-            error:
-                error.message ||
-                'Unable to generate pairing code'
-        })
-    }
-})
-
-
-// ───────────────────────────────────────────────────────────────
-// BOT INSIGHTS
-// ───────────────────────────────────────────────────────────────
-
-app.get('/api/insights', (req, res) => {
-
-    let users = {}
-
-    try {
-        users =
-            JSON.parse(
-                fs.readFileSync(
-                    ECONOMY_FILE,
-                    'utf8'
-                )
-            )
-    } catch {
-        users = {}
-    }
-
-    res.json({
-        users: Object.keys(users).length,
-
-        ttlBots:
-            sock ? 1 : 0,
-
-        onlineBots:
-            sock?.user ? 1 : 0,
-
-        totalCommands,
-
-        uptime:
-            process.uptime(),
-
-        version:
-            config.version,
-
-        botName:
-            config.botName,
-
-        mode:
-            BOT_SETTINGS.mode
-    })
-})
-
-
-// ───────────────────────────────────────────────────────────────
-// COMMAND COUNTER
-// ───────────────────────────────────────────────────────────────
-
-app.get('/api/command', (req, res) => {
-
-    totalCommands++
-
-    res.json({
-        success: true,
-        totalCommands
-    })
-})
-
-
-// ───────────────────────────────────────────────────────────────
-// ADD USER
-// ───────────────────────────────────────────────────────────────
-
-app.post('/api/add-user', (req, res) => {
-
-    try {
-
-        const {
-            jid,
-            name
-        } = req.body
-
-        if (!jid) {
-            return res.status(400).json({
-                error: 'jid required'
-            })
-        }
-
-        const economy =
-            readJSON(
-                ECONOMY_FILE,
-                {}
-            )
-
-        if (!economy[jid]) {
-
-            economy[jid] = {
-                name:
-                    name || 'User',
-
-                balance: 1000,
-                xp: 0,
-                level: 1
-            }
-
-            writeJSON(
-                ECONOMY_FILE,
-                economy
-            )
-        }
-
-        res.json({
-            success: true
-        })
-
-    } catch (error) {
-
-        res.status(500).json({
-            error:
-                error.message
-        })
-    }
-})
-
-
-// ───────────────────────────────────────────────────────────────
-// START EXPRESS
-// ───────────────────────────────────────────────────────────────
-
-app.listen(PORT, () => {
-
-    console.log('')
-    console.log('╭──────────────────────────────╮')
-    console.log(`│      ${config.botName} ONLINE       │`)
-    console.log('├──────────────────────────────┤')
-    console.log(`│ Port: ${PORT}`)
-    console.log(`│ Version: ${config.version}`)
-    console.log(`│ Mode: ${config.mode}`)
-    console.log('╰──────────────────────────────╯')
-    console.log('')
-})
-
-
 // ═══════════════════════════════════════════════════════════════
 // JSON HELPERS
 // ═══════════════════════════════════════════════════════════════
 
-function readJSON(file, fallback = {}) {
+function readJSON(
+    file,
+    fallback = {}
+) {
 
     try {
 
@@ -518,7 +210,10 @@ function readJSON(file, fallback = {}) {
 }
 
 
-function writeJSON(file, data) {
+function writeJSON(
+    file,
+    data
+) {
 
     fs.writeFileSync(
         file,
@@ -546,8 +241,12 @@ const BOT_SETTINGS =
     )
 
 BOT_SETTINGS.afk ??= {}
-BOT_SETTINGS.mode ??= config.mode
-BOT_SETTINGS.darkeye ??= false
+
+BOT_SETTINGS.mode ??=
+    config.mode
+
+BOT_SETTINGS.darkeye ??=
+    false
 
 
 function saveSettings() {
@@ -579,15 +278,25 @@ function saveEconomy() {
 }
 
 
-function getUser(jid, name = 'User') {
+function getUser(
+    jid,
+    name = 'User'
+) {
 
     if (!economy[jid]) {
 
         economy[jid] = {
+
             name,
-            balance: 1000,
-            xp: 0,
-            level: 1
+
+            balance:
+                1000,
+
+            xp:
+                0,
+
+            level:
+                1
         }
 
         saveEconomy()
@@ -597,7 +306,10 @@ function getUser(jid, name = 'User') {
 }
 
 
-function addXP(jid, amount = 1) {
+function addXP(
+    jid,
+    amount = 1
+) {
 
     const user =
         getUser(jid)
@@ -610,7 +322,10 @@ function addXP(jid, amount = 1) {
     if (user.xp >= required) {
 
         user.xp -= required
+
         user.level++
+
+        saveEconomy()
 
         return true
     }
@@ -638,8 +353,7 @@ let reconnecting = false
 
 let totalCommands = 0
 
-const startTime =
-    Date.now()
+let pairingInProgress = false
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -652,25 +366,42 @@ function formatUptime(seconds) {
         Math.floor(seconds)
 
     const days =
-        Math.floor(seconds / 86400)
+        Math.floor(
+            seconds / 86400
+        )
 
     seconds %= 86400
 
     const hours =
-        Math.floor(seconds / 3600)
+        Math.floor(
+            seconds / 3600
+        )
 
     seconds %= 3600
 
     const minutes =
-        Math.floor(seconds / 60)
+        Math.floor(
+            seconds / 60
+        )
 
     seconds %= 60
 
     return [
-        days ? `${days}d` : '',
-        hours ? `${hours}h` : '',
-        minutes ? `${minutes}m` : '',
+
+        days
+            ? `${days}d`
+            : '',
+
+        hours
+            ? `${hours}h`
+            : '',
+
+        minutes
+            ? `${minutes}m`
+            : '',
+
         `${seconds}s`
+
     ]
         .filter(Boolean)
         .join(' ')
@@ -687,6 +418,7 @@ function getText(message) {
         message.message
 
     return (
+
         msg.conversation ||
 
         msg.extendedTextMessage?.text ||
@@ -705,8 +437,11 @@ function getText(message) {
 function getSender(m) {
 
     return (
+
         m.key.participant ||
+
         m.key.remoteJid ||
+
         ''
     )
 }
@@ -721,13 +456,20 @@ function isGroupJid(jid) {
 function getMentionedJids(m) {
 
     return (
+
         m.message
             ?.extendedTextMessage
             ?.contextInfo
-            ?.mentionedJid || []
+            ?.mentionedJid ||
+
+        []
     )
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
 
 async function isAdmin(
     jid,
@@ -740,6 +482,10 @@ async function isAdmin(
             return false
         }
 
+        if (!sock) {
+            return false
+        }
+
         const metadata =
             await sock.groupMetadata(
                 groupJid
@@ -747,7 +493,8 @@ async function isAdmin(
 
         const participant =
             metadata.participants.find(
-                p => p.id === jid
+                p =>
+                    p.id === jid
             )
 
         return Boolean(
@@ -761,17 +508,28 @@ async function isAdmin(
 }
 
 
-async function isBotAdmin(groupJid) {
+async function isBotAdmin(
+    groupJid
+) {
 
     try {
 
-        if (!sock?.user?.id) {
+        if (
+            !sock?.user?.id
+        ) {
             return false
         }
 
+        const botNumber =
+            sock.user.id
+                .split(':')[0]
+                .split('@')[0]
+
+        const botJid =
+            `${botNumber}@s.whatsapp.net`
+
         return await isAdmin(
-            sock.user.id.split(':')[0] +
-            '@s.whatsapp.net',
+            botJid,
             groupJid
         )
 
@@ -791,7 +549,10 @@ async function reply(
     m
 ) {
 
-    if (!sock || !m) {
+    if (
+        !sock ||
+        !m
+    ) {
         return
     }
 
@@ -808,10 +569,710 @@ async function reply(
 
 
 // ═══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+
+app.get(
+    '/',
+    (req, res) => {
+
+        const dashboard =
+            path.join(
+                PUBLIC_DIR,
+                'dashboard.html'
+            )
+
+        if (
+            fs.existsSync(
+                dashboard
+            )
+        ) {
+
+            return res.sendFile(
+                dashboard
+            )
+        }
+
+        res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${config.botName}</title>
+</head>
+
+<body style="font-family:Arial;text-align:center;padding:50px">
+
+<h1>${config.botName}</h1>
+
+<p>Bot is running.</p>
+
+<p>Version: ${config.version}</p>
+
+<p>
+<a href="/pair">
+Get Pair Code
+</a>
+</p>
+
+</body>
+</html>
+`)
+    }
+)
+
+
+// ═══════════════════════════════════════════════════════════════
+// PAIRING PAGE
+// ═══════════════════════════════════════════════════════════════
+
+app.get(
+    '/pair',
+    (req, res) => {
+
+        res.send(`
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width,initial-scale=1">
+
+<title>
+${config.botName} Pair
+</title>
+
+<style>
+
+body {
+
+    font-family:
+        Arial,
+        sans-serif;
+
+    background:
+        #111;
+
+    color:
+        white;
+
+    text-align:
+        center;
+
+    padding:
+        50px 20px;
+}
+
+input {
+
+    padding:
+        14px;
+
+    width:
+        280px;
+
+    max-width:
+        90%;
+
+    border-radius:
+        8px;
+
+    border:
+        none;
+
+    margin-bottom:
+        15px;
+}
+
+button {
+
+    padding:
+        14px 25px;
+
+    border:
+        none;
+
+    border-radius:
+        8px;
+
+    cursor:
+        pointer;
+}
+
+#result {
+
+    margin-top:
+        25px;
+
+    font-size:
+        25px;
+
+    font-weight:
+        bold;
+
+    word-break:
+        break-word;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>
+${config.botName}
+</h1>
+
+<p>
+Enter your WhatsApp number
+with country code.
+</p>
+
+<input
+id="number"
+placeholder="263783546271"
+inputmode="numeric"
+/>
+
+<br>
+
+<button
+onclick="pair()">
+
+GET PAIR CODE
+
+</button>
+
+<div id="result"></div>
+
+<script>
+
+async function pair() {
+
+    const number =
+        document
+            .getElementById('number')
+            .value
+            .trim()
+
+    if (!number) {
+
+        alert(
+            'Enter your WhatsApp number'
+        )
+
+        return
+    }
+
+    const result =
+        document
+            .getElementById('result')
+
+    result.innerText =
+        '⏳ Connecting to WhatsApp...'
+
+    try {
+
+        const response =
+            await fetch(
+                '/api/pair?number=' +
+                encodeURIComponent(number)
+            )
+
+        const data =
+            await response.json()
+
+        if (data.code) {
+
+            result.innerText =
+                data.code
+
+        } else {
+
+            result.innerText =
+                '❌ ' +
+                (
+                    data.error ||
+                    'Failed'
+                )
+        }
+
+    } catch (error) {
+
+        result.innerText =
+            '❌ Connection failed'
+
+    }
+}
+
+</script>
+
+</body>
+
+</html>
+`)
+    }
+)
+
+
+// ═══════════════════════════════════════════════════════════════
+// PAIRING API
+// ═══════════════════════════════════════════════════════════════
+
+app.get(
+    '/api/pair',
+    async (req, res) => {
+
+        try {
+
+            const number =
+                String(
+                    req.query.number ||
+                    ''
+                )
+                    .replace(
+                        /\D/g,
+                        ''
+                    )
+
+            if (!number) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        success:
+                            false,
+
+                        error:
+                            'WhatsApp number is required'
+                    })
+            }
+
+
+            if (!sock) {
+
+                return res
+                    .status(503)
+                    .json({
+
+                        success:
+                            false,
+
+                        error:
+                            'WhatsApp socket is not ready yet. Please wait a few seconds.'
+                    })
+            }
+
+
+            if (
+                sock.authState
+                    ?.creds
+                    ?.registered
+            ) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        success:
+                            false,
+
+                        error:
+                            'This bot is already registered. Delete the session folder before pairing a new number.'
+                    })
+            }
+
+
+            if (
+                pairingInProgress
+            ) {
+
+                return res
+                    .status(429)
+                    .json({
+
+                        success:
+                            false,
+
+                        error:
+                            'A pairing request is already in progress. Please wait.'
+                    })
+            }
+
+
+            pairingInProgress =
+                true
+
+
+            console.log('')
+
+            console.log(
+                '╭──────────────────────────────╮'
+            )
+
+            console.log(
+                '│       PAIRING REQUEST        │'
+            )
+
+            console.log(
+                '├──────────────────────────────┤'
+            )
+
+            console.log(
+                `│ Number: ${number}`
+            )
+
+            console.log(
+                '│ Requesting pairing code...'
+            )
+
+            console.log(
+                '╰──────────────────────────────╯'
+            )
+
+
+            /*
+             * Baileys pairing works best after
+             * the socket has started connecting.
+             *
+             * If the socket is already open,
+             * we can request immediately.
+             */
+
+            if (
+                sock.user
+            ) {
+
+                console.log(
+                    '⚠️ Socket already has a user.'
+                )
+            }
+
+
+            /*
+             * Give the socket a short amount of time
+             * to initialize before requesting code.
+             */
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        2000
+                    )
+            )
+
+
+            if (!sock) {
+
+                throw new Error(
+                    'WhatsApp socket is no longer available.'
+                )
+            }
+
+
+            console.log(
+                '🔗 Requesting WhatsApp pairing code...'
+            )
+
+
+            const code =
+                await sock.requestPairingCode(
+                    number
+                )
+
+
+            const formatted =
+                code
+                    ?.match(/.{1,4}/g)
+                    ?.join('-') ||
+                code
+
+
+            console.log(
+                `✅ Pairing code generated: ${formatted}`
+            )
+
+
+            return res.json({
+
+                success:
+                    true,
+
+                code:
+                    formatted
+            })
+
+
+        } catch (error) {
+
+            console.error('')
+
+            console.error(
+                '╭──────────────────────────────╮'
+            )
+
+            console.error(
+                '│       PAIRING ERROR          │'
+            )
+
+            console.error(
+                '├──────────────────────────────┤'
+            )
+
+            console.error(
+                `│ ${error.message}`
+            )
+
+            console.error(
+                '╰──────────────────────────────╯'
+            )
+
+
+            return res
+                .status(500)
+                .json({
+
+                    success:
+                        false,
+
+                    error:
+                        error.message ||
+                        'Unable to generate pairing code'
+                })
+
+
+        } finally {
+
+            pairingInProgress =
+                false
+        }
+    }
+)
+
+
+// ═══════════════════════════════════════════════════════════════
+// BOT INSIGHTS
+// ═══════════════════════════════════════════════════════════════
+
+app.get(
+    '/api/insights',
+    (req, res) => {
+
+        let users = {}
+
+        try {
+
+            users =
+                JSON.parse(
+                    fs.readFileSync(
+                        ECONOMY_FILE,
+                        'utf8'
+                    )
+                )
+
+        } catch {
+
+            users = {}
+        }
+
+
+        res.json({
+
+            users:
+                Object.keys(
+                    users
+                ).length,
+
+            ttlBots:
+                sock
+                    ? 1
+                    : 0,
+
+            onlineBots:
+                sock?.user
+                    ? 1
+                    : 0,
+
+            totalCommands,
+
+            uptime:
+                process.uptime(),
+
+            version:
+                config.version,
+
+            botName:
+                config.botName,
+
+            mode:
+                BOT_SETTINGS.mode
+        })
+    }
+)
+
+
+// ═══════════════════════════════════════════════════════════════
+// COMMAND COUNTER
+// ═══════════════════════════════════════════════════════════════
+
+app.get(
+    '/api/command',
+    (req, res) => {
+
+        totalCommands++
+
+        res.json({
+
+            success:
+                true,
+
+            totalCommands
+        })
+    }
+)
+
+
+// ═══════════════════════════════════════════════════════════════
+// ADD USER
+// ═══════════════════════════════════════════════════════════════
+
+app.post(
+    '/api/add-user',
+    (req, res) => {
+
+        try {
+
+            const {
+                jid,
+                name
+            } = req.body
+
+
+            if (!jid) {
+
+                return res
+                    .status(400)
+                    .json({
+
+                        error:
+                            'jid required'
+                    })
+            }
+
+
+            const economyData =
+                readJSON(
+                    ECONOMY_FILE,
+                    {}
+                )
+
+
+            if (
+                !economyData[jid]
+            ) {
+
+                economyData[jid] = {
+
+                    name:
+                        name ||
+                        'User',
+
+                    balance:
+                        1000,
+
+                    xp:
+                        0,
+
+                    level:
+                        1
+                }
+
+
+                writeJSON(
+                    ECONOMY_FILE,
+                    economyData
+                )
+            }
+
+
+            res.json({
+
+                success:
+                    true
+            })
+
+
+        } catch (error) {
+
+            res
+                .status(500)
+                .json({
+
+                    error:
+                        error.message
+                })
+        }
+    }
+)
+
+
+// ═══════════════════════════════════════════════════════════════
+// START EXPRESS
+// ═══════════════════════════════════════════════════════════════
+
+app.listen(
+    PORT,
+    () => {
+
+        console.log('')
+
+        console.log(
+            '╭──────────────────────────────╮'
+        )
+
+        console.log(
+            `│      ${config.botName} ONLINE       │`
+        )
+
+        console.log(
+            '├──────────────────────────────┤'
+        )
+
+        console.log(
+            `│ Port: ${PORT}`
+        )
+
+        console.log(
+            `│ Version: ${config.version}`
+        )
+
+        console.log(
+            `│ Mode: ${config.mode}`
+        )
+
+        console.log(
+            '╰──────────────────────────────╯'
+        )
+
+        console.log('')
+    }
+)
+
+
+// ═══════════════════════════════════════════════════════════════
 // WELCOME / GOODBYE
 // ═══════════════════════════════════════════════════════════════
 
-async function handleGroupParticipantsUpdate(update) {
+async function handleGroupParticipantsUpdate(
+    update
+) {
 
     try {
 
@@ -821,31 +1282,47 @@ async function handleGroupParticipantsUpdate(update) {
             action
         } = update
 
-        if (!isGroupJid(id)) {
+
+        if (
+            !isGroupJid(id)
+        ) {
             return
         }
 
-        if (!groupSettings[id]?.welcome) {
+
+        if (
+            !groupSettings[id]?.welcome
+        ) {
             return
         }
 
-        for (const participant of participants) {
+
+        for (
+            const participant
+            of participants
+        ) {
 
             const number =
-                participant.split('@')[0]
+                participant
+                    .split('@')[0]
 
-            if (action === 'add') {
+
+            if (
+                action === 'add'
+            ) {
 
                 await sock.sendMessage(
                     id,
                     {
+
                         text:
-                            `╭───❒ *WELCOME* ❒───╮
+`╭───❒ *WELCOME* ❒───╮
 │ 👋 Welcome @${number}
 │ 🤖 ${config.botName}
 ╰────────────────────❒
 
 ${config.watermark}`,
+
                         mentions: [
                             participant
                         ]
@@ -853,18 +1330,23 @@ ${config.watermark}`,
                 )
             }
 
-            if (action === 'remove') {
+
+            if (
+                action === 'remove'
+            ) {
 
                 await sock.sendMessage(
                     id,
                     {
+
                         text:
-                            `╭───❒ *GOODBYE* ❒───╮
+`╭───❒ *GOODBYE* ❒───╮
 │ 👋 Goodbye @${number}
 │ 🤖 ${config.botName}
 ╰────────────────────❒
 
 ${config.watermark}`,
+
                         mentions: [
                             participant
                         ]
@@ -872,6 +1354,7 @@ ${config.watermark}`,
                 )
             }
         }
+
 
     } catch (error) {
 
@@ -896,54 +1379,74 @@ async function handleAFK(
     const afk =
         BOT_SETTINGS.afk || {}
 
-    // Sender returns from AFK
-    if (afk[sender]) {
+
+    if (
+        afk[sender]
+    ) {
 
         const old =
             afk[sender]
+
 
         delete afk[sender]
 
         saveSettings()
 
+
         await reply(
-            `╭───❒ *AFK* ❒───╮
+`╭───❒ *AFK* ❒───╮
 │ Welcome back!
 │ You were AFK for:
 │ ${formatUptime(
-    (Date.now() - old.time) / 1000
+    (
+        Date.now() -
+        old.time
+    ) / 1000
 )}
 ╰────────────────❒`,
             m
         )
     }
 
-    // Check mentioned users
+
     const mentions =
         getMentionedJids(m)
 
-    for (const jid of mentions) {
 
-        if (!afk[jid]) {
+    for (
+        const jid
+        of mentions
+    ) {
+
+        if (
+            !afk[jid]
+        ) {
             continue
         }
+
 
         const data =
             afk[jid]
 
+
         const duration =
             formatUptime(
-                (Date.now() - data.time) / 1000
+                (
+                    Date.now() -
+                    data.time
+                ) / 1000
             )
 
+
         await reply(
-            `╭───❒ *AFK USER* ❒───╮
+`╭───❒ *AFK USER* ❒───╮
 │ 👤 @${jid.split('@')[0]}
 │ 💬 ${data.reason || 'AFK'}
 │ ⏱️ ${duration}
 ╰────────────────────❒`,
             m
         )
+
 
         break
     }
@@ -961,17 +1464,28 @@ async function handleAntiLink(
     body
 ) {
 
-    if (!isGroupJid(from)) {
+    if (
+        !isGroupJid(from)
+    ) {
         return false
     }
 
-    if (!groupSettings[from]?.antilink) {
+
+    if (
+        !groupSettings[from]?.antilink
+    ) {
         return false
     }
 
-    if (!body.includes('chat.whatsapp.com')) {
+
+    if (
+        !body.includes(
+            'chat.whatsapp.com'
+        )
+    ) {
         return false
     }
+
 
     const admin =
         await isAdmin(
@@ -979,12 +1493,17 @@ async function handleAntiLink(
             from
         )
 
+
     if (admin) {
         return false
     }
 
+
     const botAdmin =
-        await isBotAdmin(from)
+        await isBotAdmin(
+            from
+        )
+
 
     if (!botAdmin) {
 
@@ -996,22 +1515,26 @@ async function handleAntiLink(
         return true
     }
 
+
     try {
 
         await sock.sendMessage(
             from,
             {
-                delete: m.key
+                delete:
+                    m.key
             }
         )
 
+
         await reply(
-            `╭───❒ *ANTI-LINK* ❒───╮
+`╭───❒ *ANTI-LINK* ❒───╮
 │ 🚫 WhatsApp group links
 │ are not allowed here.
 ╰──────────────────────❒`,
             m
         )
+
 
     } catch (error) {
 
@@ -1020,6 +1543,7 @@ async function handleAntiLink(
             error.message
         )
     }
+
 
     return true
 }
@@ -1035,35 +1559,41 @@ async function processMessage(
 
     try {
 
-        if (!m?.message) {
+        if (
+            !m?.message
+        ) {
             return
         }
 
+
         const from =
             m.key.remoteJid
+
 
         if (!from) {
             return
         }
 
-        if (m.key.fromMe) {
+
+        if (
+            m.key.fromMe
+        ) {
             return
         }
+
 
         const sender =
             getSender(m)
 
+
         const body =
             getText(m).trim()
+
 
         if (!body) {
             return
         }
 
-
-        // ───────────────────────────────────────────────────────
-        // AFK
-        // ───────────────────────────────────────────────────────
 
         await handleAFK(
             m,
@@ -1071,10 +1601,6 @@ async function processMessage(
             sender
         )
 
-
-        // ───────────────────────────────────────────────────────
-        // ANTI-LINK
-        // ───────────────────────────────────────────────────────
 
         const blocked =
             await handleAntiLink(
@@ -1084,72 +1610,76 @@ async function processMessage(
                 body
             )
 
+
         if (blocked) {
             return
         }
 
 
-        // ───────────────────────────────────────────────────────
-        // PREFIX
-        // ───────────────────────────────────────────────────────
-
         const prefix =
             config.prefix
 
-        if (!body.startsWith(prefix)) {
+
+        if (
+            !body.startsWith(
+                prefix
+            )
+        ) {
             return
         }
 
 
-        // ───────────────────────────────────────────────────────
-        // PARSE COMMAND
-        // ───────────────────────────────────────────────────────
-
         const withoutPrefix =
-            body.slice(prefix.length).trim()
+            body
+                .slice(
+                    prefix.length
+                )
+                .trim()
+
 
         if (!withoutPrefix) {
             return
         }
 
+
         const parts =
-            withoutPrefix.split(/\s+/)
+            withoutPrefix.split(
+                /\s+/
+            )
+
 
         const cmd =
-            parts.shift()
+            parts
+                .shift()
                 .toLowerCase()
+
 
         const args =
             parts
+
 
         const text =
             args.join(' ')
 
 
-        // ───────────────────────────────────────────────────────
-        // GROUP
-        // ───────────────────────────────────────────────────────
-
         const isGroup =
             isGroupJid(from)
 
 
-        // ───────────────────────────────────────────────────────
-        // OWNER
-        // ───────────────────────────────────────────────────────
-
         const isOwner =
             sender === OWNER_JID ||
-            sender.split(':')[0] === OWNER_NUM
+            sender
+                .split(':')[0] ===
+                OWNER_NUM
 
 
-        // ───────────────────────────────────────────────────────
-        // ADMIN
-        // ───────────────────────────────────────────────────────
+        let senderIsAdmin =
+            false
 
-        let senderIsAdmin = false
 
-        if (isGroup) {
+        if (
+            isGroup
+        ) {
 
             senderIsAdmin =
                 await isAdmin(
@@ -1159,13 +1689,10 @@ async function processMessage(
         }
 
 
-        // ───────────────────────────────────────────────────────
-        // USER
-        // ───────────────────────────────────────────────────────
-
         const pushName =
             m.pushName ||
             'User'
+
 
         const user =
             getUser(
@@ -1174,93 +1701,100 @@ async function processMessage(
             )
 
 
-        // ───────────────────────────────────────────────────────
-        // COMMAND CONTEXT
-        // ───────────────────────────────────────────────────────
-
         const context = {
 
-            // Baileys
             sock,
+
             m,
 
-            // Message
             from,
+
             sender,
+
             body,
 
-            // Command
             cmd,
+
             args,
+
             text,
 
-            // Bot
             config,
+
             prefix,
 
-            // Owner
             OWNER_NUM,
+
             OWNER_JID,
+
             isOwner,
 
-            // Group
             isGroup,
-            isAdmin: senderIsAdmin,
+
+            isAdmin:
+                senderIsAdmin,
 
             isBotAdmin:
                 isGroup
-                    ? await isBotAdmin(from)
+                    ? await isBotAdmin(
+                        from
+                    )
                     : false,
 
             groupSettings,
 
-            // User
             user,
 
             getUser,
+
             addXP,
+
             saveEconomy,
 
-            // Settings
             BOT_SETTINGS,
+
             saveSettings,
 
-            // Utilities
-            reply: text =>
-                reply(text, m),
+            reply:
+                text =>
+                    reply(
+                        text,
+                        m
+                    ),
 
             getText,
+
             getMentionedJids,
 
             formatUptime,
 
-            // Paths
             ROOT,
+
             DATABASE_DIR,
+
             TMP_DIR,
+
             SESSION_DIR,
 
-            // Stats
             get totalCommands() {
                 return totalCommands
             }
         }
 
 
-        // ───────────────────────────────────────────────────────
-        // SEND TO COMMAND HANDLER
-        // ───────────────────────────────────────────────────────
-
         const executed =
             await handleCommand(
                 context
             )
 
-        if (executed) {
+
+        if (
+            executed
+        ) {
 
             totalCommands++
 
-            // Dashboard counter
+
             try {
 
                 await axios.post(
@@ -1268,10 +1802,10 @@ async function processMessage(
                 )
 
             } catch {
-                // Dashboard may be unavailable.
-                // Do not break the bot.
+                // Dashboard is optional.
             }
         }
+
 
     } catch (error) {
 
@@ -1279,6 +1813,7 @@ async function processMessage(
             '[MESSAGE ERROR]',
             error
         )
+
 
         try {
 
@@ -1288,7 +1823,7 @@ async function processMessage(
             )
 
         } catch {
-            // Ignore reply failure
+            // Ignore reply failure.
         }
     }
 }
@@ -1300,9 +1835,12 @@ async function processMessage(
 
 async function startBot() {
 
-    if (reconnecting) {
+    if (
+        reconnecting
+    ) {
         return
     }
+
 
     try {
 
@@ -1314,10 +1852,12 @@ async function startBot() {
                 SESSION_DIR
             )
 
+
         const {
             version
         } =
             await fetchLatestBaileysVersion()
+
 
         console.log(
             `Using WhatsApp version ${version.join('.')}`
@@ -1329,14 +1869,17 @@ async function startBot() {
 
                 version,
 
-                auth: state,
+                auth:
+                    state,
 
                 logger:
                     pino({
-                        level: 'silent'
+                        level:
+                            'info'
                     }),
 
-                printQRInTerminal: false,
+                printQRInTerminal:
+                    false,
 
                 browser:
                     Browsers.ubuntu(
@@ -1351,19 +1894,11 @@ async function startBot() {
             })
 
 
-        // ───────────────────────────────────────────────────────
-        // SAVE AUTH
-        // ───────────────────────────────────────────────────────
-
         sock.ev.on(
             'creds.update',
             saveCreds
         )
 
-
-        // ───────────────────────────────────────────────────────
-        // CONNECTION UPDATE
-        // ───────────────────────────────────────────────────────
 
         sock.ev.on(
             'connection.update',
@@ -1375,7 +1910,10 @@ async function startBot() {
                 } = update
 
 
-                if (connection === 'connecting') {
+                if (
+                    connection ===
+                    'connecting'
+                ) {
 
                     console.log(
                         '⏳ Connecting to WhatsApp...'
@@ -1383,45 +1921,59 @@ async function startBot() {
                 }
 
 
-                if (connection === 'open') {
+                if (
+                    connection === 'open'
+                ) {
 
-                    reconnecting = false
+                    reconnecting =
+                        false
+
 
                     console.log('')
+
                     console.log(
                         '╭──────────────────────────────╮'
                     )
+
                     console.log(
                         `│       ${config.botName} CONNECTED      │`
                     )
+
                     console.log(
                         '├──────────────────────────────┤'
                     )
+
                     console.log(
                         `│ Version: ${config.version}`
                     )
+
                     console.log(
                         `│ Mode: ${BOT_SETTINGS.mode}`
                     )
+
                     console.log(
                         `│ Uptime: ${formatUptime(
                             process.uptime()
                         )}`
                     )
+
                     console.log(
                         '╰──────────────────────────────╯'
                     )
+
                     console.log('')
 
 
-                    // Add connected bot/user
                     try {
 
-                        if (sock.user?.id) {
+                        if (
+                            sock.user?.id
+                        ) {
 
                             await axios.post(
                                 `${config.dashboardUrl}/api/add-user`,
                                 {
+
                                     jid:
                                         sock.user.id
                                             .split(':')[0]
@@ -1439,12 +1991,14 @@ async function startBot() {
                         }
 
                     } catch {
-                        // Dashboard unavailable
+                        // Dashboard optional.
                     }
                 }
 
 
-                if (connection === 'close') {
+                if (
+                    connection === 'close'
+                ) {
 
                     const statusCode =
                         lastDisconnect
@@ -1463,18 +2017,24 @@ async function startBot() {
                     )
 
 
-                    if (shouldReconnect) {
+                    if (
+                        shouldReconnect
+                    ) {
 
-                        reconnecting = true
+                        reconnecting =
+                            true
+
 
                         console.log(
                             '🔄 Reconnecting in 5 seconds...'
                         )
 
+
                         setTimeout(
                             () => {
 
-                                reconnecting = false
+                                reconnecting =
+                                    false
 
                                 startBot()
 
@@ -1493,10 +2053,6 @@ async function startBot() {
         )
 
 
-        // ───────────────────────────────────────────────────────
-        // MESSAGES
-        // ───────────────────────────────────────────────────────
-
         sock.ev.on(
             'messages.upsert',
             async ({
@@ -1504,11 +2060,17 @@ async function startBot() {
                 type
             }) => {
 
-                if (type !== 'notify') {
+                if (
+                    type !== 'notify'
+                ) {
                     return
                 }
 
-                for (const message of messages) {
+
+                for (
+                    const message
+                    of messages
+                ) {
 
                     await processMessage(
                         message
@@ -1518,10 +2080,6 @@ async function startBot() {
         )
 
 
-        // ───────────────────────────────────────────────────────
-        // GROUP PARTICIPANTS
-        // ───────────────────────────────────────────────────────
-
         sock.ev.on(
             'group-participants.update',
             handleGroupParticipantsUpdate
@@ -1530,16 +2088,20 @@ async function startBot() {
 
     } catch (error) {
 
-        reconnecting = false
+        reconnecting =
+            false
+
 
         console.error(
             '[START BOT ERROR]',
             error
         )
 
+
         console.log(
             'Retrying in 10 seconds...'
         )
+
 
         setTimeout(
             startBot,
@@ -1558,27 +2120,30 @@ async function boot() {
     try {
 
         console.log('')
+
         console.log(
             '╭──────────────────────────────╮'
         )
+
         console.log(
             `│       ${config.botName} BOOTING        │`
         )
+
         console.log(
             '╰──────────────────────────────╯'
         )
+
         console.log('')
 
 
-        // Load every command from /commands
         await loadCommands()
 
 
         console.log('')
 
 
-        // Start WhatsApp
         await startBot()
+
 
     } catch (error) {
 
