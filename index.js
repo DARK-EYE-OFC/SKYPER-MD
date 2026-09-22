@@ -580,29 +580,14 @@ function normalizeNumber(value) {
 }
 
 
-<<<<<<< HEAD
-function isOwnerNumber(jid, sock = null) {
-    const number = normalizeNumber(jid)
-=======
 function isOwnerNumber(
     jid,
     socket = null
 ) {
->>>>>>> 160c3a9 (add portable session ID support)
 
-    // Owner numbers from .env
-    if (ownerNumbers.includes(number)) {
-        return true
-    }
+    const number =
+        normalizeNumber(jid)
 
-<<<<<<< HEAD
-    // The currently connected WhatsApp account is also an owner
-    if (sock?.user?.id) {
-        const connectedNumber =
-            normalizeNumber(sock.user.id)
-
-        if (number === connectedNumber) {
-=======
     // Owner numbers from .env
     if (
         ownerNumbers.includes(
@@ -628,7 +613,6 @@ function isOwnerNumber(
             connectedNumber
         ) {
 
->>>>>>> 160c3a9 (add portable session ID support)
             return true
         }
     }
@@ -1742,16 +1726,11 @@ async function processMessage(
             isGroupJid(from)
 
         const isOwner =
-<<<<<<< HEAD
-    m.key.fromMe ||
-    isOwnerNumber(sender, sock)
-=======
             m.key.fromMe ||
             isOwnerNumber(
                 sender,
                 sock
             )
->>>>>>> 160c3a9 (add portable session ID support)
 
         const isSudo =
             isSudoNumber(sender)
