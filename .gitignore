@@ -1,15 +1,6 @@
-# ==============================
-# ENVIRONMENT & SECRETS
-# ==============================
-
 .env
 .env.*
 !.env.example
-
-
-# ==============================
-# WHATSAPP SESSION
-# ==============================
 
 session/
 sessions/
@@ -19,92 +10,16 @@ creds.json
 creds/
 *.session
 
-
-# ==============================
-# DATABASE / USER DATA
-# ==============================
-
 database/
 data/
-*.db
-*.sqlite
-*.sqlite3
-
-
-# ==============================
-# TEMPORARY FILES
-# ==============================
 
 tmp/
 temp/
 cache/
 downloads/
 media/
-*.tmp
-
-
-# ==============================
-# LOGS
-# ==============================
 
 logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-
-# ==============================
-# NODE.JS
-# ==============================
 
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
-
-
-# ==============================
-# RUNTIME FILES
-# ==============================
-
-*.pid
-*.seed
-*.pid.lock
-
-
-# ==============================
-# OS FILES
-# ==============================
-
-.DS_Store
-Thumbs.db
-desktop.ini
-
-
-# ==============================
-# EDITORS
-# ==============================
-
-.vscode/
-.idea/
-*.swp
-*.swo
-
-
-# ==============================
-# BUILD / COVERAGE
-# ==============================
-
-dist/
-build/
-coverage/
-
-
-# ==============================
-# BACKUPS
-# ==============================
-
-*.bak
-*.backup
-*.old

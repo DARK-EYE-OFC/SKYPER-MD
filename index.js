@@ -1,4 +1,8 @@
-import 'dotenv/config'
+import dotenv from 'dotenv'
+
+dotenv.config({
+    override: true
+})
 
 import fs from 'fs'
 import path from 'path'
@@ -21,20 +25,38 @@ import {
     handleCommand
 } from './commands/commandHandler.js'
 
+import {
+    generateSessionId,
+    restoreSessionFromId,
+    getSessionIdFromEnv
+} from './lib/sessionManager.js'
+
 
 // ═══════════════════════════════════════════════════════════════
 // PATHS
 // ═══════════════════════════════════════════════════════════════
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+const __filename =
+    fileURLToPath(import.meta.url)
 
-const ROOT = __dirname
+const __dirname =
+    path.dirname(__filename)
 
-const SESSION_DIR = path.join(ROOT, 'session')
-const DATABASE_DIR = path.join(ROOT, 'database')
-const TMP_DIR = path.join(ROOT, 'tmp')
-const PUBLIC_DIR = path.join(ROOT, 'public')
+const ROOT =
+    __dirname
+
+const SESSION_DIR =
+    process.env.SESSION_DIR ||
+    path.join(ROOT, 'session')
+
+const DATABASE_DIR =
+    path.join(ROOT, 'database')
+
+const TMP_DIR =
+    path.join(ROOT, 'tmp')
+
+const PUBLIC_DIR =
+    path.join(ROOT, 'public')
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -47,8 +69,15 @@ for (const dir of [
     TMP_DIR,
     PUBLIC_DIR
 ]) {
+
     if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true })
+
+        fs.mkdirSync(
+            dir,
+            {
+                recursive: true
+            }
+        )
     }
 }
 
@@ -58,13 +87,22 @@ for (const dir of [
 // ═══════════════════════════════════════════════════════════════
 
 const ECONOMY_FILE =
-    path.join(DATABASE_DIR, 'economy.json')
+    path.join(
+        DATABASE_DIR,
+        'economy.json'
+    )
 
 const SETTINGS_FILE =
-    path.join(DATABASE_DIR, 'settings.json')
+    path.join(
+        DATABASE_DIR,
+        'settings.json'
+    )
 
 
-function createJSONFile(file, defaultData) {
+function createJSONFile(
+    file,
+    defaultData
+) {
 
     if (!fs.existsSync(file)) {
 
@@ -134,7 +172,7 @@ const config = {
         '> *♤powered by DARK-EYE OFC DEV*',
 
     sessionPath:
-        './session',
+        SESSION_DIR,
 
     dashboardUrl:
         process.env.DASHBOARD_URL ||
@@ -143,31 +181,40 @@ const config = {
     apiKeys: {
 
         openweather:
-            process.env.OPENWEATHER_API_KEY || '',
+            process.env.OPENWEATHER_API_KEY ||
+            '',
 
         removebg:
-            process.env.REMOVEBG_API_KEY || '',
+            process.env.REMOVEBG_API_KEY ||
+            '',
 
         lovable:
-            process.env.LOVABLE_API_KEY || '',
+            process.env.LOVABLE_API_KEY ||
+            '',
 
         unsplash:
-            process.env.UNSPLASH_API_KEY || '',
+            process.env.UNSPLASH_API_KEY ||
+            '',
 
         news:
-            process.env.NEWS_API_KEY || '',
+            process.env.NEWS_API_KEY ||
+            '',
 
         gemini:
-            process.env.GEMINI_API_KEY || '',
+            process.env.GEMINI_API_KEY ||
+            '',
 
         openai:
-            process.env.OPENAI_API_KEY || '',
+            process.env.OPENAI_API_KEY ||
+            '',
 
         googleSafeBrowsing:
-            process.env.GOOGLE_SAFE_BROWSING_API_KEY || '',
+            process.env.GOOGLE_SAFE_BROWSING_API_KEY ||
+            '',
 
         urlhaus:
-            process.env.URLHAUS_AUTH_KEY || ''
+            process.env.URLHAUS_AUTH_KEY ||
+            ''
     }
 }
 
@@ -418,6 +465,8 @@ let totalCommands = 0
 
 let pairingInProgress = false
 
+let sessionMessageSent = false
+
 
 // ═══════════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -494,7 +543,9 @@ function getText(message) {
 
         msg.buttonsResponseMessage?.selectedButtonId ||
 
-        msg.listResponseMessage?.singleSelectReply?.selectedRowId ||
+        msg.listResponseMessage
+            ?.singleSelectReply
+            ?.selectedRowId ||
 
         ''
     )
@@ -529,20 +580,55 @@ function normalizeNumber(value) {
 }
 
 
+<<<<<<< HEAD
 function isOwnerNumber(jid, sock = null) {
     const number = normalizeNumber(jid)
+=======
+function isOwnerNumber(
+    jid,
+    socket = null
+) {
+>>>>>>> 160c3a9 (add portable session ID support)
 
     // Owner numbers from .env
     if (ownerNumbers.includes(number)) {
         return true
     }
 
+<<<<<<< HEAD
     // The currently connected WhatsApp account is also an owner
     if (sock?.user?.id) {
         const connectedNumber =
             normalizeNumber(sock.user.id)
 
         if (number === connectedNumber) {
+=======
+    // Owner numbers from .env
+    if (
+        ownerNumbers.includes(
+            number
+        )
+    ) {
+
+        return true
+    }
+
+    // Currently connected WhatsApp account
+    if (
+        socket?.user?.id
+    ) {
+
+        const connectedNumber =
+            normalizeNumber(
+                socket.user.id
+            )
+
+        if (
+            number ===
+            connectedNumber
+        ) {
+
+>>>>>>> 160c3a9 (add portable session ID support)
             return true
         }
     }
@@ -1282,6 +1368,18 @@ app.listen(
         console.log(
             `🔐 Sudo numbers: ${sudoNumbers.length}`
         )
+
+        console.log(
+            `📁 Session: ${SESSION_DIR}`
+        )
+
+        console.log(
+            `🔐 Session ID: ${
+                getSessionIdFromEnv()
+                    ? 'FOUND'
+                    : 'NOT SET'
+            }`
+        )
     }
 )
 
@@ -1567,8 +1665,8 @@ async function processMessage(
             return
         }
 
-        // Allow the connected bot account to use commands
-// if (m.key.fromMe) return
+        // Allow the connected bot account to use commands.
+        // DO NOT put "if (m.key.fromMe) return" here.
 
         const sender =
             getSender(m)
@@ -1576,7 +1674,6 @@ async function processMessage(
         const body =
             getText(m).trim()
 
-        // DEBUG
         console.log(
             `[MESSAGE] from=${from} sender=${sender} body=${body}`
         )
@@ -1645,8 +1742,16 @@ async function processMessage(
             isGroupJid(from)
 
         const isOwner =
+<<<<<<< HEAD
     m.key.fromMe ||
     isOwnerNumber(sender, sock)
+=======
+            m.key.fromMe ||
+            isOwnerNumber(
+                sender,
+                sock
+            )
+>>>>>>> 160c3a9 (add portable session ID support)
 
         const isSudo =
             isSudoNumber(sender)
@@ -1829,6 +1934,82 @@ async function processMessage(
 
 
 // ═══════════════════════════════════════════════════════════════
+// GENERATE & SEND SESSION ID
+// ═══════════════════════════════════════════════════════════════
+
+async function sendSessionId() {
+
+    if (
+        !sock?.user?.id
+    ) {
+        return
+    }
+
+    try {
+
+        console.log(
+            '🔐 Generating portable Session ID...'
+        )
+
+        const sessionId =
+            generateSessionId(
+                SESSION_DIR
+            )
+
+        console.log(
+            `✅ Session ID generated (${sessionId.length} characters)`
+        )
+
+        const ownerJid =
+            sock.user.id
+
+        const message =
+`╭───❒ *${config.botName}* ❒───╮
+│
+│ ✅ *WhatsApp Connected!*
+│
+│ 🤖 Bot: ${config.botName}
+│ 📦 Version: ${config.version}
+│ 🟢 Status: ONLINE
+│
+│ 🔐 *SESSION ID*
+│
+│ ${sessionId}
+│
+│ ⚠️ *IMPORTANT*
+│ Keep this Session ID private.
+│ Anyone with it may be able
+│ to restore this bot session.
+│
+╰──────────────────────────────❒
+
+${config.watermark}`
+
+        await sock.sendMessage(
+            ownerJid,
+            {
+                text: message
+            }
+        )
+
+        sessionMessageSent =
+            true
+
+        console.log(
+            '📤 Session ID sent to connected WhatsApp account.'
+        )
+
+    } catch (error) {
+
+        console.error(
+            '❌ Session ID generation failed:',
+            error.message
+        )
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 // START WHATSAPP
 // ═══════════════════════════════════════════════════════════════
 
@@ -1842,6 +2023,55 @@ async function startBot() {
 
     try {
 
+        // ═══════════════════════════════════════════════════════
+        // RESTORE PORTABLE SESSION ID
+        // ═══════════════════════════════════════════════════════
+
+        const sessionId =
+            getSessionIdFromEnv()
+
+        if (sessionId) {
+
+            try {
+
+                console.log(
+                    '🔐 SESSION_ID detected.'
+                )
+
+                const result =
+                    restoreSessionFromId(
+                        sessionId,
+                        SESSION_DIR
+                    )
+
+                console.log(
+                    `✅ Session restored successfully (${result.files} files).`
+                )
+
+            } catch (error) {
+
+                console.error(
+                    '❌ SESSION_ID restore failed:',
+                    error.message
+                )
+
+                console.log(
+                    '⚠️ Continuing with the existing session directory.'
+                )
+            }
+
+        } else {
+
+            console.log(
+                'ℹ️ No SESSION_ID found. Using local session directory.'
+            )
+        }
+
+
+        // ═══════════════════════════════════════════════════════
+        // BAILEYS AUTH STATE
+        // ═══════════════════════════════════════════════════════
+
         const {
             state,
             saveCreds
@@ -1849,6 +2079,7 @@ async function startBot() {
             await useMultiFileAuthState(
                 SESSION_DIR
             )
+
 
         const {
             version
@@ -1858,6 +2089,11 @@ async function startBot() {
         console.log(
             `Using WhatsApp version ${version.join('.')}`
         )
+
+
+        // ═══════════════════════════════════════════════════════
+        // CREATE SOCKET
+        // ═══════════════════════════════════════════════════════
 
         sock =
             makeWASocket({
@@ -1889,6 +2125,10 @@ async function startBot() {
             })
 
 
+        // ═══════════════════════════════════════════════════════
+        // SAVE BAILEYS CREDENTIAL UPDATES
+        // ═══════════════════════════════════════════════════════
+
         sock.ev.on(
             'creds.update',
             saveCreds
@@ -1908,6 +2148,7 @@ async function startBot() {
                     lastDisconnect
                 } = update
 
+
                 if (
                     connection ===
                     'connecting'
@@ -1918,12 +2159,20 @@ async function startBot() {
                     )
                 }
 
+
+                // ═══════════════════════════════════════════════
+                // CONNECTED
+                // ═══════════════════════════════════════════════
+
                 if (
                     connection ===
                     'open'
                 ) {
 
                     reconnecting =
+                        false
+
+                    sessionMessageSent =
                         false
 
                     console.log('')
@@ -1970,6 +2219,11 @@ async function startBot() {
                         '📥 Message listener: ACTIVE'
                     )
 
+
+                    // ═══════════════════════════════════════════
+                    // DASHBOARD ACCOUNT
+                    // ═══════════════════════════════════════════
+
                     try {
 
                         if (
@@ -1989,6 +2243,7 @@ async function startBot() {
                                     name:
                                         sock.user.name ||
                                         config.botName
+
                                 },
                                 {
                                     timeout:
@@ -2000,7 +2255,27 @@ async function startBot() {
                     } catch {
                         // Dashboard optional.
                     }
+
+
+                    // ═══════════════════════════════════════════
+                    // GENERATE PORTABLE SESSION
+                    // ═══════════════════════════════════════════
+
+                    await new Promise(
+                        resolve =>
+                            setTimeout(
+                                resolve,
+                                3000
+                            )
+                    )
+
+                    await sendSessionId()
                 }
+
+
+                // ═══════════════════════════════════════════════
+                // CONNECTION CLOSED
+                // ═══════════════════════════════════════════════
 
                 if (
                     connection ===
@@ -2020,6 +2295,7 @@ async function startBot() {
                     console.log(
                         `❌ WhatsApp disconnected. Code: ${statusCode}`
                     )
+
 
                     if (
                         shouldReconnect
@@ -2164,6 +2440,18 @@ async function boot() {
 
         console.log(
             `⚡ Prefix: ${config.prefix}`
+        )
+
+        console.log(
+            `📁 Session directory: ${SESSION_DIR}`
+        )
+
+        console.log(
+            `🔐 SESSION_ID: ${
+                getSessionIdFromEnv()
+                    ? 'FOUND'
+                    : 'NOT SET'
+            }`
         )
 
         console.log('')
