@@ -12,7 +12,86 @@ const settings = new Map();
 
 const DEFAULT_ACTION = 'delete';
 
-const LINK_REGEX = /(?:https?:\/\/|www\.|wa\.me\/|chat\.whatsapp\.com\/|t\.me\/|telegram\.me\/|instagram\.com\/|facebook\.com\/|youtube\.com\/|youtu\.be\/|twitter\.com\/|x\.com\/|tiktok\.com\/|discord\.gg\/|discord\.com\/invite\/)/i;
+const LINK_REGEX =
+    /(?:https?:\/\/|www\.|wa\.me\/|chat\.whatsapp\.com\/|t\.me\/|telegram\.me\/|instagram\.com\/|facebook\.com\/|youtube\.com\/|youtu\.be\/|twitter\.com\/|x\.com\/|tiktok\.com\/|discord\.gg\/|discord\.com\/invite\/)/i;
+
+
+/*
+ * Safely normalize a WhatsApp JID.
+ *
+ * Examples:
+ * 263783546271:12@s.whatsapp.net
+ * 263783546271@s.whatsapp.net
+ *
+ * become:
+ * 263783546271@s.whatsapp.net
+ */
+const normalizeJid = (jid) => {
+    if (!jid || typeof jid !== 'string') {
+        return '';
+    }
+
+    try {
+        const value = jid.trim();
+
+        if (!value) {
+            return '';
+        }
+
+        const [userPart, serverPart] =
+            value.split('@');
+
+        if (!userPart || !serverPart) {
+            return value;
+        }
+
+        const user =
+            userPart.split(':')[0];
+
+        if (!user) {
+            return '';
+        }
+
+        return `${user}@${serverPart}`;
+
+    } catch {
+        return '';
+    }
+};
+
+
+/*
+ * Safely get a phone/user number from a JID.
+ */
+const getJidNumber = (jid) => {
+    const normalized =
+        normalizeJid(jid);
+
+    if (!normalized) {
+        return '';
+    }
+
+    return normalized
+        .split('@')[0]
+        .split(':')[0];
+};
+
+
+/*
+ * Safely check whether a participant is an admin.
+ */
+const participantIsAdmin = (participant) => {
+    if (!participant) {
+        return false;
+    }
+
+    return (
+        participant.admin === 'admin' ||
+        participant.admin === 'superadmin' ||
+        participant.isAdmin === true
+    );
+};
+
 
 const getSettings = (chatId) => {
     if (!settings.has(chatId)) {
@@ -25,63 +104,208 @@ const getSettings = (chatId) => {
     return settings.get(chatId);
 };
 
-const isLink = (text = '') => LINK_REGEX.test(text);
 
-const isAdmin = async (sock, chatId, jid) => {
-    try {
-        const metadata = await sock.groupMetadata(chatId);
-
-        const participant = metadata.participants.find(
-            p => p.id === jid
-        );
-
-        return Boolean(
-            participant &&
-            (participant.admin === 'admin' ||
-                participant.admin === 'superadmin')
-        );
-    } catch {
-        return false;
-    }
-};
-
-const isBotAdmin = async (sock, chatId) => {
-    try {
-        const metadata = await sock.groupMetadata(chatId);
-
-        const botJid = String(sock.user?.id || '')
-            .split(':')[0];
-
-        const participant = metadata.participants.find(
-            p => p.id.startsWith(botJid)
-        );
-
-        return Boolean(
-            participant &&
-            (participant.admin === 'admin' ||
-                participant.admin === 'superadmin')
-        );
-    } catch {
-        return false;
-    }
-};
-
-const getTargetJid = (m) => {
-    const context =
-        m.raw?.message?.extendedTextMessage?.contextInfo ||
-        m.raw?.message?.imageMessage?.contextInfo ||
-        m.raw?.message?.videoMessage?.contextInfo ||
-        m.raw?.message?.documentMessage?.contextInfo ||
-        {};
-
-    return (
-        context.participant ||
-        m.sender
+const isLink = (text = '') => {
+    return LINK_REGEX.test(
+        String(text)
     );
 };
 
-const deleteMessage = async (sock, m) => {
+
+/*
+ * Check whether a user is a group admin.
+ *
+ * This version avoids unsafe JID comparisons.
+ */
+const isAdmin = async (
+    sock,
+    chatId,
+    jid
+) => {
     try {
+
+        if (!sock || !chatId || !jid) {
+            return false;
+        }
+
+        const metadata =
+            await sock.groupMetadata(
+                chatId
+            );
+
+        if (
+            !metadata ||
+            !Array.isArray(
+                metadata.participants
+            )
+        ) {
+            return false;
+        }
+
+        const targetNumber =
+            getJidNumber(jid);
+
+        if (!targetNumber) {
+            return false;
+        }
+
+        const participant =
+            metadata.participants.find(
+                participant => {
+
+                    const participantNumber =
+                        getJidNumber(
+                            participant?.id
+                        );
+
+                    return (
+                        participantNumber &&
+                        participantNumber ===
+                            targetNumber
+                    );
+                }
+            );
+
+        return participantIsAdmin(
+            participant
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[ANTILINK] Admin check failed:',
+            error.message
+        );
+
+        return false;
+    }
+};
+
+
+/*
+ * Check whether the bot itself is an admin.
+ */
+const isBotAdmin = async (
+    sock,
+    chatId
+) => {
+    try {
+
+        if (!sock || !chatId) {
+            return false;
+        }
+
+        const metadata =
+            await sock.groupMetadata(
+                chatId
+            );
+
+        if (
+            !metadata ||
+            !Array.isArray(
+                metadata.participants
+            )
+        ) {
+            return false;
+        }
+
+        const botJid =
+            sock?.user?.id;
+
+        if (!botJid) {
+            return false;
+        }
+
+        const botNumber =
+            getJidNumber(botJid);
+
+        if (!botNumber) {
+            return false;
+        }
+
+        const participant =
+            metadata.participants.find(
+                participant => {
+
+                    const participantNumber =
+                        getJidNumber(
+                            participant?.id
+                        );
+
+                    return (
+                        participantNumber &&
+                        participantNumber ===
+                            botNumber
+                    );
+                }
+            );
+
+        return participantIsAdmin(
+            participant
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[ANTILINK] Bot admin check failed:',
+            error.message
+        );
+
+        return false;
+    }
+};
+
+
+/*
+ * Safely get the sender JID.
+ */
+const getTargetJid = (m) => {
+
+    if (!m) {
+        return '';
+    }
+
+    const context =
+        m.raw?.message
+            ?.extendedTextMessage
+            ?.contextInfo ||
+        m.raw?.message
+            ?.imageMessage
+            ?.contextInfo ||
+        m.raw?.message
+            ?.videoMessage
+            ?.contextInfo ||
+        m.raw?.message
+            ?.documentMessage
+            ?.contextInfo ||
+        {};
+
+    return (
+        context?.participant ||
+        m.sender ||
+        ''
+    );
+};
+
+
+/*
+ * Delete a message.
+ */
+const deleteMessage = async (
+    sock,
+    m
+) => {
+
+    try {
+
+        if (
+            !sock ||
+            !m?.from ||
+            !m?.raw?.key
+        ) {
+            return false;
+        }
+
         await sock.sendMessage(
             m.from,
             {
@@ -90,26 +314,66 @@ const deleteMessage = async (sock, m) => {
         );
 
         return true;
-    } catch {
+
+    } catch (error) {
+
+        console.error(
+            '[ANTILINK] Delete failed:',
+            error.message
+        );
+
         return false;
     }
 };
 
-const kickUser = async (sock, chatId, jid) => {
+
+/*
+ * Remove a user from the group.
+ */
+const kickUser = async (
+    sock,
+    chatId,
+    jid
+) => {
+
     try {
+
+        if (!jid) {
+            return false;
+        }
+
+        const normalized =
+            normalizeJid(jid);
+
+        if (!normalized) {
+            return false;
+        }
+
         await sock.groupParticipantsUpdate(
             chatId,
-            [jid],
+            [normalized],
             'remove'
         );
 
         return true;
-    } catch {
+
+    } catch (error) {
+
+        console.error(
+            '[ANTILINK] Kick failed:',
+            error.message
+        );
+
         return false;
     }
 };
 
+
+/*
+ * ANTI-LINK COMMAND
+ */
 const antilink = {
+
     name: 'antilink',
 
     aliases: [
@@ -119,42 +383,66 @@ const antilink = {
         'linkblock'
     ],
 
-    description: 'Automatically handles links sent in groups.',
+    description:
+        'Automatically handles links sent in groups.',
 
-    usage: '.antilink on | off | status | warn | kick | delete',
+    usage:
+        '.antilink on | off | status | warn | kick | delete',
 
-    async execute({ sock, m, args }) {
-        if (!m.isGroup) {
+    async execute({
+        sock,
+        m,
+        args
+    }) {
+
+        if (!m?.isGroup) {
+
             return sock.sendMessage(
                 m.from,
                 {
-                    text: '❌ This command can only be used in groups.'
+                    text:
+                        '❌ This command can only be used in groups.'
                 },
-                { quoted: m.raw }
+                {
+                    quoted: m.raw
+                }
             );
         }
+
 
         /*
          * Only group admins can configure Anti-Link.
          */
-        const senderIsAdmin = await isAdmin(
-            sock,
-            m.from,
-            m.sender
-        );
+        const senderIsAdmin =
+            await isAdmin(
+                sock,
+                m.from,
+                m.sender
+            );
 
         if (!senderIsAdmin) {
+
             return sock.sendMessage(
                 m.from,
                 {
-                    text: '❌ Only group admins can configure Anti-Link.'
+                    text:
+                        '❌ Only group admins can configure Anti-Link.'
                 },
-                { quoted: m.raw }
+                {
+                    quoted: m.raw
+                }
             );
         }
 
-        const setting = getSettings(m.from);
-        const action = String(args[0] || '').toLowerCase();
+
+        const setting =
+            getSettings(m.from);
+
+        const action =
+            String(
+                args?.[0] || ''
+            ).toLowerCase();
+
 
         /*
          * STATUS
@@ -163,6 +451,7 @@ const antilink = {
             !action ||
             action === 'status'
         ) {
+
             return sock.sendMessage(
                 m.from,
                 {
@@ -186,9 +475,12 @@ Usage:
 .antilink kick
 .antilink delete`
                 },
-                { quoted: m.raw }
+                {
+                    quoted: m.raw
+                }
             );
         }
+
 
         /*
          * ENABLE
@@ -197,6 +489,7 @@ Usage:
             action === 'on' ||
             action === 'enable'
         ) {
+
             setting.enabled = true;
 
             return sock.sendMessage(
@@ -211,9 +504,12 @@ Usage:
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━╯`
                 },
-                { quoted: m.raw }
+                {
+                    quoted: m.raw
+                }
             );
         }
+
 
         /*
          * DISABLE
@@ -222,6 +518,7 @@ Usage:
             action === 'off' ||
             action === 'disable'
         ) {
+
             setting.enabled = false;
 
             return sock.sendMessage(
@@ -234,9 +531,12 @@ Usage:
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━╯`
                 },
-                { quoted: m.raw }
+                {
+                    quoted: m.raw
+                }
             );
         }
+
 
         /*
          * ACTION
@@ -246,25 +546,32 @@ Usage:
             action === 'warn' ||
             action === 'kick'
         ) {
+
             if (action === 'kick') {
-                const botAdmin = await isBotAdmin(
-                    sock,
-                    m.from
-                );
+
+                const botAdmin =
+                    await isBotAdmin(
+                        sock,
+                        m.from
+                    );
 
                 if (!botAdmin) {
+
                     return sock.sendMessage(
                         m.from,
                         {
                             text:
-'❌ I need to be a group admin to use the KICK action.'
+                                '❌ I need to be a group admin to use the KICK action.'
                         },
-                        { quoted: m.raw }
+                        {
+                            quoted: m.raw
+                        }
                     );
                 }
             }
 
-            setting.action = action;
+            setting.action =
+                action;
 
             return sock.sendMessage(
                 m.from,
@@ -280,9 +587,12 @@ Usage:
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━╯`
                 },
-                { quoted: m.raw }
+                {
+                    quoted: m.raw
+                }
             );
         }
+
 
         return sock.sendMessage(
             m.from,
@@ -298,163 +608,244 @@ Use:
 .antilink warn
 .antilink kick`
             },
-            { quoted: m.raw }
-        );
-    }
-};
-
-/*
- * This function is called by Main.js for every incoming
- * group message.
- */
-const handleAntiLink = async ({ sock, m }) => {
-    if (!m?.isGroup || !m?.text) {
-        return false;
-    }
-
-    const setting = getSettings(m.from);
-
-    if (!setting.enabled) {
-        return false;
-    }
-
-    /*
-     * Ignore commands.
-     */
-    if (m.isCommand) {
-        return false;
-    }
-
-    if (!isLink(m.text)) {
-        return false;
-    }
-
-    /*
-     * Never punish group admins.
-     */
-    const senderIsAdmin = await isAdmin(
-        sock,
-        m.from,
-        m.sender
-    );
-
-    if (senderIsAdmin) {
-        return false;
-    }
-
-    const botAdmin = await isBotAdmin(
-        sock,
-        m.from
-    );
-
-    /*
-     * DELETE
-     */
-    if (setting.action === 'delete') {
-        if (!botAdmin) {
-            await sock.sendMessage(
-                m.from,
-                {
-                    text:
-'⚠️ Link detected, but I need admin permission to delete it.'
-                }
-            );
-
-            return true;
-        }
-
-        const deleted = await deleteMessage(
-            sock,
-            m
-        );
-
-        if (deleted) {
-            await sock.sendMessage(
-                m.from,
-                {
-                    text:
-`🚫 @${m.sender.split('@')[0]}, links are not allowed in this group.`,
-                    mentions: [m.sender]
-                }
-            );
-        }
-
-        return true;
-    }
-
-    /*
-     * WARN
-     */
-    if (setting.action === 'warn') {
-        await sock.sendMessage(
-            m.from,
             {
-                text:
-`⚠️ *ANTI-LINK WARNING*
-
-@${m.sender.split('@')[0]}, links are not allowed in this group.
-
-Please remove the link.`,
-                mentions: [m.sender]
+                quoted: m.raw
             }
         );
-
-        return true;
     }
+};
 
-    /*
-     * KICK
-     */
-    if (setting.action === 'kick') {
-        if (!botAdmin) {
+
+/*
+ * HANDLE EVERY INCOMING GROUP MESSAGE
+ */
+const handleAntiLink = async ({
+    sock,
+    m
+}) => {
+
+    try {
+
+        if (
+            !m?.isGroup ||
+            !m?.text
+        ) {
+            return false;
+        }
+
+
+        const setting =
+            getSettings(m.from);
+
+        if (!setting.enabled) {
+            return false;
+        }
+
+
+        /*
+         * Ignore commands.
+         */
+        if (m.isCommand) {
+            return false;
+        }
+
+
+        if (!isLink(m.text)) {
+            return false;
+        }
+
+
+        /*
+         * Get a safe sender JID.
+         */
+        const sender =
+            normalizeJid(
+                getTargetJid(m)
+            );
+
+        if (!sender) {
+
+            console.warn(
+                '[ANTILINK] Link detected but sender JID is unavailable.'
+            );
+
+            return false;
+        }
+
+
+        /*
+         * Never punish group admins.
+         */
+        const senderIsAdmin =
+            await isAdmin(
+                sock,
+                m.from,
+                sender
+            );
+
+        if (senderIsAdmin) {
+            return false;
+        }
+
+
+        const botAdmin =
+            await isBotAdmin(
+                sock,
+                m.from
+            );
+
+
+        /*
+         * DELETE
+         */
+        if (
+            setting.action === 'delete'
+        ) {
+
+            if (!botAdmin) {
+
+                await sock.sendMessage(
+                    m.from,
+                    {
+                        text:
+                            '⚠️ Link detected, but I need admin permission to delete it.'
+                    }
+                );
+
+                return true;
+            }
+
+
+            const deleted =
+                await deleteMessage(
+                    sock,
+                    m
+                );
+
+
+            if (deleted) {
+
+                await sock.sendMessage(
+                    m.from,
+                    {
+                        text:
+`🚫 @${getJidNumber(sender)}, links are not allowed in this group.`,
+                        mentions: [
+                            sender
+                        ]
+                    }
+                );
+            }
+
+            return true;
+        }
+
+
+        /*
+         * WARN
+         */
+        if (
+            setting.action === 'warn'
+        ) {
+
             await sock.sendMessage(
                 m.from,
                 {
                     text:
-'⚠️ Link detected, but I need admin permission to remove the sender.'
+`⚠️ *ANTI-LINK WARNING*
+
+@${getJidNumber(sender)}, links are not allowed in this group.
+
+Please remove the link.`,
+                    mentions: [
+                        sender
+                    ]
                 }
             );
 
             return true;
         }
 
-        const deleted = await deleteMessage(
-            sock,
-            m
-        );
 
-        const kicked = await kickUser(
-            sock,
-            m.from,
-            m.sender
-        );
+        /*
+         * KICK
+         */
+        if (
+            setting.action === 'kick'
+        ) {
 
-        if (kicked) {
-            await sock.sendMessage(
-                m.from,
-                {
-                    text:
-`🚫 @${m.sender.split('@')[0]} was removed.
+            if (!botAdmin) {
+
+                await sock.sendMessage(
+                    m.from,
+                    {
+                        text:
+                            '⚠️ Link detected, but I need admin permission to remove the sender.'
+                    }
+                );
+
+                return true;
+            }
+
+
+            const deleted =
+                await deleteMessage(
+                    sock,
+                    m
+                );
+
+
+            const kicked =
+                await kickUser(
+                    sock,
+                    m.from,
+                    sender
+                );
+
+
+            if (kicked) {
+
+                await sock.sendMessage(
+                    m.from,
+                    {
+                        text:
+`🚫 @${getJidNumber(sender)} was removed.
 
 Reason: Sending links in the group.`,
-                    mentions: [m.sender]
-                }
-            );
-        } else if (!deleted) {
-            await sock.sendMessage(
-                m.from,
-                {
-                    text:
-'❌ I could not remove the user. Check my group admin permissions.'
-                }
-            );
+                        mentions: [
+                            sender
+                        ]
+                    }
+                );
+
+            } else if (!deleted) {
+
+                await sock.sendMessage(
+                    m.from,
+                    {
+                        text:
+                            '❌ I could not remove the user. Check my group admin permissions.'
+                    }
+                );
+            }
+
+            return true;
         }
 
-        return true;
-    }
 
-    return false;
+        return false;
+
+    } catch (error) {
+
+        console.error(
+            '[ANTILINK ERROR]',
+            error
+        );
+
+        return false;
+    }
 };
+
 
 export {
     settings,
