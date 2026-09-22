@@ -529,14 +529,25 @@ function normalizeNumber(value) {
 }
 
 
-function isOwnerNumber(jid) {
+function isOwnerNumber(jid, sock = null) {
+    const number = normalizeNumber(jid)
 
-    const number =
-        normalizeNumber(jid)
+    // Owner numbers from .env
+    if (ownerNumbers.includes(number)) {
+        return true
+    }
 
-    return ownerNumbers.includes(
-        number
-    )
+    // The currently connected WhatsApp account is also an owner
+    if (sock?.user?.id) {
+        const connectedNumber =
+            normalizeNumber(sock.user.id)
+
+        if (number === connectedNumber) {
+            return true
+        }
+    }
+
+    return false
 }
 
 
@@ -1634,7 +1645,8 @@ async function processMessage(
             isGroupJid(from)
 
         const isOwner =
-            isOwnerNumber(sender)
+    m.key.fromMe ||
+    isOwnerNumber(sender, sock)
 
         const isSudo =
             isSudoNumber(sender)
