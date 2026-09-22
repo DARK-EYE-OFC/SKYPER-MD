@@ -1,26 +1,37 @@
-import os from 'os';
+// Commands/General/menu.js
+
 import fs from 'fs';
 import path from 'path';
 import config from '../../config.js';
 
 /*
  * ╔══════════════════════════════════════════════╗
- * ║          DARK-EYE V2 MAIN MENU              ║
+ * ║             SKYPER-MD MAIN MENU             ║
  * ╚══════════════════════════════════════════════╝
  *
- * All commands created so far are listed here.
+ * Complete SKYPER-MD command menu.
  *
- * IMPORTANT:
- * - Commands are arranged A-Z inside categories.
- * - Total command count is calculated automatically.
- * - This menu lists command names, not every alias.
+ * Features:
+ * • Commands arranged A-Z
+ * • Automatic command count
+ * • Memory information
+ * • Storage information
+ * • Uptime information
+ * • Node.js runtime information
+ * • Owner information
+ * • Automatic bot image
+ * • Text fallback if image is missing
  */
 
+
 /*
+ * ═══════════════════════════════════════════════
  * COMMAND DATABASE
+ * ═══════════════════════════════════════════════
  */
 
 const commandCategories = {
+
     AI: [
         'ai',
         'ask',
@@ -161,8 +172,11 @@ const commandCategories = {
     ]
 };
 
+
 /*
- * Sort every category A-Z.
+ * ═══════════════════════════════════════════════
+ * SORT COMMANDS A-Z
+ * ═══════════════════════════════════════════════
  */
 
 for (
@@ -170,6 +184,7 @@ for (
         commandCategories
     )
 ) {
+
     commandCategories[category].sort(
         (a, b) =>
             a.localeCompare(
@@ -183,11 +198,15 @@ for (
     );
 }
 
+
 /*
- * Calculate total commands.
+ * ═══════════════════════════════════════════════
+ * TOTAL COMMANDS
+ * ═══════════════════════════════════════════════
  */
 
 const getTotalCommands = () => {
+
     return Object.values(
         commandCategories
     ).reduce(
@@ -197,11 +216,17 @@ const getTotalCommands = () => {
     );
 };
 
+
 /*
- * Format uptime.
+ * ═══════════════════════════════════════════════
+ * FORMAT UPTIME
+ * ═══════════════════════════════════════════════
  */
 
-const formatUptime = (seconds) => {
+const formatUptime = (
+    seconds = 0
+) => {
+
     seconds = Math.floor(
         Number(seconds) || 0
     );
@@ -235,18 +260,23 @@ const formatUptime = (seconds) => {
     };
 };
 
+
 /*
- * Format bytes.
+ * ═══════════════════════════════════════════════
+ * FORMAT BYTES
+ * ═══════════════════════════════════════════════
  */
 
 const formatBytes = (
     bytes = 0
 ) => {
+
+    const value =
+        Number(bytes);
+
     if (
-        !Number.isFinite(
-            Number(bytes)
-        ) ||
-        Number(bytes) <= 0
+        !Number.isFinite(value) ||
+        value <= 0
     ) {
         return '0 B';
     }
@@ -259,9 +289,7 @@ const formatBytes = (
         'TB'
     ];
 
-    let size =
-        Number(bytes);
-
+    let size = value;
     let index = 0;
 
     while (
@@ -269,6 +297,7 @@ const formatBytes = (
         index <
             units.length - 1
     ) {
+
         size /= 1024;
         index++;
     }
@@ -278,20 +307,23 @@ const formatBytes = (
     )} ${units[index]}`;
 };
 
+
 /*
- * Calculate the size of the bot
- * project directory.
+ * ═══════════════════════════════════════════════
+ * CALCULATE PROJECT STORAGE
+ * ═══════════════════════════════════════════════
  *
- * This represents approximate
- * local bot storage usage.
+ * node_modules and .git are excluded.
  */
 
 const getDirectorySize = (
     directory
 ) => {
+
     let total = 0;
 
     try {
+
         const entries =
             fs.readdirSync(
                 directory,
@@ -303,12 +335,6 @@ const getDirectorySize = (
         for (
             const entry of entries
         ) {
-            /*
-             * Avoid counting node_modules,
-             * Git data and temporary folders
-             * because these can make the
-             * menu unnecessarily expensive.
-             */
 
             if (
                 entry.name ===
@@ -326,23 +352,29 @@ const getDirectorySize = (
                 );
 
             try {
+
                 if (
                     entry.isDirectory()
                 ) {
+
                     total +=
                         getDirectorySize(
                             fullPath
                         );
+
                 } else {
+
                     total +=
                         fs.statSync(
                             fullPath
                         ).size;
                 }
+
             } catch {
                 // Ignore inaccessible files.
             }
         }
+
     } catch {
         return 0;
     }
@@ -350,30 +382,53 @@ const getDirectorySize = (
     return total;
 };
 
+
 /*
- * Build command category text.
+ * ═══════════════════════════════════════════════
+ * CATEGORY ICONS
+ * ═══════════════════════════════════════════════
+ */
+
+const categoryIcons = {
+
+    AI: '🤖',
+
+    Download: '📥',
+
+    Fun: '🎭',
+
+    Games: '🎮',
+
+    General: '⚙️',
+
+    Group: '👥',
+
+    Owner: '👑',
+
+    Search: '🔎',
+
+    Settings: '🛠️',
+
+    System: '💻',
+
+    Textmaker: '🎨'
+};
+
+
+/*
+ * ═══════════════════════════════════════════════
+ * BUILD CATEGORY
+ * ═══════════════════════════════════════════════
  */
 
 const buildCategory = (
     title,
     commands
 ) => {
-    const iconMap = {
-        AI: '🤖',
-        Download: '📥',
-        Fun: '🎭',
-        Games: '🎮',
-        General: '⚙️',
-        Group: '👥',
-        Owner: '👑',
-        Search: '🔎',
-        Settings: '🛠️',
-        System: '💻',
-        Textmaker: '🎨'
-    };
 
     const icon =
-        iconMap[title] || '📌';
+        categoryIcons[title] ||
+        '📌';
 
     const lines =
         commands.map(
@@ -389,8 +444,11 @@ const buildCategory = (
     ].join('\n');
 };
 
+
 /*
- * Build complete menu.
+ * ═══════════════════════════════════════════════
+ * BUILD COMPLETE MENU
+ * ═══════════════════════════════════════════════
  */
 
 const buildMenu = ({
@@ -403,10 +461,11 @@ const buildMenu = ({
     owner,
     totalCommands
 }) => {
+
     let menu =
 `╭━━━〔 ⚡ ${botName} 〕━━━╮
 ┃
-┃ 🤖 *Bot name:* ${botName}
+┃ 🤖 *Bot Name:* ${botName}
 ┃ 🔢 *Version:* ${version}
 ┃ 🧠 *Memory:* ${memory}
 ┃ 💾 *Storage:* ${storage}
@@ -419,8 +478,9 @@ const buildMenu = ({
 
 ╭━━━〔 📖 COMMAND MENU 〕━━━╮
 ┃
-┃ 🔥 All DARK-EYE V2 commands
-┃ 📌 Commands are arranged A-Z
+┃ ⚡ All ${botName} commands
+┃ 📌 Commands arranged A-Z
+┃ 🚀 Built for speed & power
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━╯
 
@@ -434,34 +494,47 @@ const buildMenu = ({
             commandCategories
         )
     ) {
-        menu += buildCategory(
-            category,
-            commands
-        );
+
+        menu +=
+            buildCategory(
+                category,
+                commands
+            );
     }
 
+
+    /*
+     * SKYPER-MD FOOTER
+     */
+
     menu +=
-`╭━━━〔 ⚡ DARK-EYE OFC 〕━━━╮
+`╭━━━〔 ⚡ SKYPER-MD 〕━━━╮
 ┃
-┃ 🚀 DARK-EYE V2
-┃ 🛡️ Advanced WhatsApp Multi-Device Bot
+┃ 🤖 SKYPER-MD
+┃ 🛡️ WhatsApp Multi-Device Bot
+┃
+┃ ⚡ Fast • Smart • Powerful
+┃ 🔥 Built for speed & power
 ┃
 ┃ 💙 Powered by DARK-EYE OFC
-┃ 🔥 Built for speed & power
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━╯
 
-> © ${new Date().getFullYear()} DARK-EYE OFC
-> ⚡ DARK-EYE V2 • ${version}`;
+> © ${new Date().getFullYear()} SKYPER-MD
+> ⚡ SKYPER-MD • ${version}`;
 
     return menu;
 };
 
+
 /*
+ * ═══════════════════════════════════════════════
  * MENU COMMAND
+ * ═══════════════════════════════════════════════
  */
 
 const menu = {
+
     name: 'menu',
 
     aliases: [
@@ -476,23 +549,28 @@ const menu = {
     ],
 
     description:
-        'Display the complete DARK-EYE V2 command menu.',
+        'Display the complete SKYPER-MD command menu.',
 
     usage:
         '.menu',
+
 
     async execute({
         sock,
         m
     }) {
+
         try {
+
             /*
+             * ═════════════════════════════════════
              * BOT INFORMATION
+             * ═════════════════════════════════════
              */
 
             const botName =
                 config.botName ||
-                'DARK-EYE V2';
+                'SKYPER-MD';
 
             const version =
                 config.version ||
@@ -500,13 +578,13 @@ const menu = {
 
             const owner =
                 config.ownerName ||
-                'Theon Alex';
+                'ALEX THEON';
+
 
             /*
+             * ═════════════════════════════════════
              * MEMORY
-             *
-             * RSS = total memory currently
-             * held by the Node.js process.
+             * ═════════════════════════════════════
              */
 
             const memoryUsage =
@@ -517,12 +595,11 @@ const menu = {
                     memoryUsage.rss
                 );
 
+
             /*
+             * ═════════════════════════════════════
              * STORAGE
-             *
-             * Approximate project directory
-             * size, excluding node_modules
-             * and .git.
+             * ═════════════════════════════════════
              */
 
             const projectDirectory =
@@ -540,8 +617,11 @@ const menu = {
                     storageBytes
                 );
 
+
             /*
+             * ═════════════════════════════════════
              * UPTIME
+             * ═════════════════════════════════════
              */
 
             const uptimeData =
@@ -552,22 +632,31 @@ const menu = {
             const uptime =
 `${uptimeData.days} day${uptimeData.days === 1 ? '' : 's'} - ${String(uptimeData.hours).padStart(2, '0')} hours - ${String(uptimeData.minutes).padStart(2, '0')} minutes - ${String(uptimeData.seconds).padStart(2, '0')} seconds`;
 
+
             /*
-             * RUNTIME
+             * ═════════════════════════════════════
+             * NODE.JS RUNTIME
+             * ═════════════════════════════════════
              */
 
             const runtime =
                 `Node.js ${process.version}`;
 
+
             /*
+             * ═════════════════════════════════════
              * TOTAL COMMANDS
+             * ═════════════════════════════════════
              */
 
             const totalCommands =
                 getTotalCommands();
 
+
             /*
+             * ═════════════════════════════════════
              * BUILD MENU
+             * ═════════════════════════════════════
              */
 
             const menuText =
@@ -582,25 +671,35 @@ const menu = {
                     totalCommands
                 });
 
+
             /*
-             * BOT IMAGE
+             * ═════════════════════════════════════
+             * MENU IMAGE
+             * ═════════════════════════════════════
              *
-             * Project:
+             * Project structure:
              *
-             * DARK-EYE-V2/
-             * └── Assets/
-             *     └── bot_image.jpg
+             * SKYPER-MD/
+             * ├── assets/
+             * │   └── bot_image.jpg
+             * └── Commands/
+             *     └── General/
+             *         └── menu.js
+             *
              */
 
             const imagePath =
                 path.resolve(
                     process.cwd(),
-                    'Assets',
+                    'assets',
                     'bot_image.jpg'
                 );
 
+
             /*
-             * Send image if available.
+             * ═════════════════════════════════════
+             * SEND IMAGE MENU
+             * ═════════════════════════════════════
              */
 
             if (
@@ -608,6 +707,7 @@ const menu = {
                     imagePath
                 )
             ) {
+
                 await sock.sendMessage(
                     m.from,
                     {
@@ -624,9 +724,11 @@ const menu = {
                 return true;
             }
 
+
             /*
-             * Fallback if bot image
-             * does not exist.
+             * ═════════════════════════════════════
+             * TEXT FALLBACK
+             * ═════════════════════════════════════
              */
 
             await sock.sendMessage(
@@ -641,32 +743,51 @@ const menu = {
 
             return true;
 
+
         } catch (error) {
+
             console.error(
-                '[MENU ERROR]',
+                '[SKYPER-MD MENU ERROR]',
                 error
             );
 
-            return sock.sendMessage(
-                m.from,
-                {
-                    text:
-`❌ Failed to load the DARK-EYE V2 menu.
+            try {
 
-Please check:
-• Assets/bot_image.jpg
-• Command menu configuration
-• Bot permissions
+                await sock.sendMessage(
+                    m.from,
+                    {
+                        text:
+`╭━━━〔 ❌ MENU ERROR 〕━━━╮
+┃
+┃ Failed to load SKYPER-MD menu.
+┃
+┃ Please check:
+┃ • assets/bot_image.jpg
+┃ • Menu configuration
+┃ • Bot permissions
+┃
+╰━━━━━━━━━━━━━━━━━━━━━━╯
 
-⚡ DARK-EYE OFC`
-                },
-                {
-                    quoted: m.raw
-                }
-            );
+> *♤powered by DARK-EYE OFC DEV*`
+                    },
+                    {
+                        quoted: m.raw
+                    }
+                );
+
+            } catch {}
+
+            return false;
         }
     }
 };
+
+
+/*
+ * ═══════════════════════════════════════════════
+ * EXPORTS
+ * ═══════════════════════════════════════════════
+ */
 
 export {
     commandCategories,
@@ -674,6 +795,7 @@ export {
     formatBytes,
     formatUptime,
     getDirectorySize,
+    buildCategory,
     buildMenu
 };
 
