@@ -15,7 +15,7 @@ const pingCommand = {
         await reply(
 `╭───❒ *PONG* ❒───╮
 │
-│ ⚡ Speed: ${Date.now() - start}ms
+│ ⚡ Speed: ${ping}ms
 │ 🤖 Bot: ${config.botName}
 │ 📦 Version: ${config.version}
 │ 🟢 Status: ONLINE
