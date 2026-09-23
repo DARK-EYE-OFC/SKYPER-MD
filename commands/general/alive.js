@@ -59,4 +59,4 @@ const alive = {
     }
 };
 
-export default alive;
+export default alive
