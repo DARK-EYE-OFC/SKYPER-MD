@@ -799,4 +799,4 @@ export {
     buildMenu
 };
 
-export default menu;
+export default menu
